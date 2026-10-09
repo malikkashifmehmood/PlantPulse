@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_theme.dart';
 import '../../core/validation/credential_validator.dart';
 import '../home/home_screen.dart';
+import 'create_account_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -72,6 +73,12 @@ class _AuthScreenState extends State<AuthScreen> {
       ..showSnackBar(
         SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
       );
+  }
+
+  void _openCreateAccount() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const CreateAccountScreen()));
   }
 
   @override
@@ -213,7 +220,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 Center(
                   child: TextButton(
-                    onPressed: () => _showUnavailable('Account creation'),
+                    onPressed: _openCreateAccount,
                     child: const Text('New here? Create account'),
                   ),
                 ),
