@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:plantpulse/core/security/security_constants.dart';
 import 'package:plantpulse/core/validation/credential_validator.dart';
 
 void main() {
@@ -8,8 +8,16 @@ void main() {
       expect(CredentialValidator.validateEmail('user@example.com'), isNull);
     });
 
+    test('accepts an email with surrounding whitespace', () {
+      expect(CredentialValidator.validateEmail('  user@example.com  '), isNull);
+    });
+
     test('rejects an empty email', () {
       expect(CredentialValidator.validateEmail(''), 'Email is required.');
+    });
+
+    test('rejects a whitespace-only email', () {
+      expect(CredentialValidator.validateEmail('   '), 'Email is required.');
     });
 
     test('rejects an invalid email', () {
@@ -17,6 +25,12 @@ void main() {
         CredentialValidator.validateEmail('invalid-email'),
         'Enter a valid email address.',
       );
+    });
+
+    test('rejects an email exceeding the maximum length', () {
+      final email = '${'a' * SecurityConstants.maxTextInputLength}@x.com';
+
+      expect(CredentialValidator.validateEmail(email), 'Email is too long.');
     });
   });
 
@@ -34,6 +48,21 @@ void main() {
 
     test('rejects an empty password', () {
       expect(CredentialValidator.validatePassword(''), 'Password is required.');
+    });
+
+    test('rejects a password exceeding the maximum length', () {
+      final password = 'a' * (SecurityConstants.maxTextInputLength + 1);
+
+      expect(
+        CredentialValidator.validatePassword(password),
+        'Password is too long.',
+      );
+    });
+
+    test('accepts a password at the maximum length', () {
+      final password = 'a' * SecurityConstants.maxTextInputLength;
+
+      expect(CredentialValidator.validatePassword(password), isNull);
     });
   });
 }
