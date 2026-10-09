@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/app_theme.dart';
 import '../../features/alerts/alerts_screen.dart';
-import '../../features/expert/expert_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/plants/plants_screen.dart';
 import '../../features/profile/profile_screen.dart';
@@ -26,9 +25,9 @@ class PlantPulseScaffold extends StatelessWidget {
   ];
 
   void _select(BuildContext context, int index) {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => pages[index]),
-    );
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => pages[index]));
   }
 
   @override

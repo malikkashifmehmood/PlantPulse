@@ -17,7 +17,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _Slide(
       eyebrow: 'AI CROP HEALTH',
       title: 'Diagnose crop diseases instantly',
-      body: 'Capture a clear leaf and PlantPulse helps you understand what may be affecting it.',
+      body:
+          'Capture a clear leaf and PlantPulse helps you understand what may be affecting it.',
       icon: Icons.document_scanner_rounded,
       accent: Color(0xFFDDF4E4),
     ),
@@ -31,7 +32,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _Slide(
       eyebrow: 'PRIVACY FIRST',
       title: 'Works offline',
-      body: 'Common crop diseases can be detected with an on-device model without requiring constant internet access.',
+      body:
+          'Common crop diseases can be detected with an on-device model without requiring constant internet access.',
       icon: Icons.phonelink_lock_rounded,
       accent: Color(0xFFDFF3ED),
     ),
@@ -39,9 +41,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   void next() {
     if (index == slides.length - 1) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const AuthScreen()),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const AuthScreen()));
       return;
     }
     controller.nextPage(
@@ -52,7 +54,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final slide = slides[index];
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -106,9 +107,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         width: i == index ? 26 : 7,
                         height: 7,
                         decoration: BoxDecoration(
-                          color: i == index
-                              ? PlantPulseColors.green
-                              : PlantPulseColors.line,
+                          color:
+                              i == index
+                                  ? PlantPulseColors.green
+                                  : PlantPulseColors.line,
                           borderRadius: BorderRadius.circular(20),
                         ),
                       ),
@@ -117,7 +119,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   const SizedBox(height: 20),
                   FilledButton(
                     onPressed: next,
-                    child: Text(index == slides.length - 1 ? 'Get Started' : 'Next'),
+                    child: Text(
+                      index == slides.length - 1 ? 'Get Started' : 'Next',
+                    ),
                   ),
                 ],
               ),
@@ -184,22 +188,10 @@ class _Slide extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Icon(
-                    icon,
-                    size: 72,
-                    color: PlantPulseColors.green,
-                  ),
+                  child: Icon(icon, size: 72, color: PlantPulseColors.green),
                 ),
-                Positioned(
-                  left: 26,
-                  bottom: 24,
-                  child: _TinyLeaf(),
-                ),
-                Positioned(
-                  right: 26,
-                  bottom: 28,
-                  child: _TinyLeaf(),
-                ),
+                Positioned(left: 26, bottom: 24, child: _TinyLeaf()),
+                Positioned(right: 26, bottom: 28, child: _TinyLeaf()),
               ],
             ),
           ),

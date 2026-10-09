@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../app/app_theme.dart';
 import '../../shared/widgets/plantpulse_scaffold.dart';
 import '../analysis/analysis_screen.dart';
 
@@ -29,9 +28,7 @@ class _ScanScreenState extends State<ScanScreen> {
         child: Stack(
           children: [
             Positioned.fill(
-              child: CustomPaint(
-                painter: _CameraTexturePainter(),
-              ),
+              child: CustomPaint(painter: _CameraTexturePainter()),
             ),
             SafeArea(
               child: Column(
@@ -56,7 +53,10 @@ class _ScanScreenState extends State<ScanScreen> {
                           ),
                         ),
                         _CircleButton(
-                          icon: flash ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                          icon:
+                              flash
+                                  ? Icons.flash_on_rounded
+                                  : Icons.flash_off_rounded,
                           onTap: () => setState(() => flash = !flash),
                         ),
                       ],
@@ -165,11 +165,13 @@ class _CircleButton extends StatelessWidget {
 class _CameraTexturePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()..shader = const LinearGradient(
-      colors: [Color(0xFF223F2C), Color(0xFF516D45), Color(0xFF1E3024)],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    ).createShader(Offset.zero & size);
+    final p =
+        Paint()
+          ..shader = const LinearGradient(
+            colors: [Color(0xFF223F2C), Color(0xFF516D45), Color(0xFF1E3024)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, p);
   }
 
@@ -180,27 +182,36 @@ class _CameraTexturePainter extends CustomPainter {
 class _LeafPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = const Color(0xFF72B96B).withValues(alpha: .72)
-      ..style = PaintingStyle.fill;
-    final path = Path()
-      ..moveTo(size.width * .50, size.height * .83)
-      ..cubicTo(
-        size.width * .14, size.height * .62,
-        size.width * .18, size.height * .19,
-        size.width * .56, size.height * .10,
-      )
-      ..cubicTo(
-        size.width * .87, size.height * .18,
-        size.width * .88, size.height * .62,
-        size.width * .50, size.height * .83,
-      )
-      ..close();
+    final p =
+        Paint()
+          ..color = const Color(0xFF72B96B).withValues(alpha: .72)
+          ..style = PaintingStyle.fill;
+    final path =
+        Path()
+          ..moveTo(size.width * .50, size.height * .83)
+          ..cubicTo(
+            size.width * .14,
+            size.height * .62,
+            size.width * .18,
+            size.height * .19,
+            size.width * .56,
+            size.height * .10,
+          )
+          ..cubicTo(
+            size.width * .87,
+            size.height * .18,
+            size.width * .88,
+            size.height * .62,
+            size.width * .50,
+            size.height * .83,
+          )
+          ..close();
     canvas.drawPath(path, p);
-    final vein = Paint()
-      ..color = Colors.white.withValues(alpha: .65)
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
+    final vein =
+        Paint()
+          ..color = Colors.white.withValues(alpha: .65)
+          ..strokeWidth = 3
+          ..style = PaintingStyle.stroke;
     canvas.drawLine(
       Offset(size.width * .50, size.height * .82),
       Offset(size.width * .56, size.height * .13),
