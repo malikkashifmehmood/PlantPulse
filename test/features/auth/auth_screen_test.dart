@@ -1,11 +1,23 @@
+import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plantpulse/features/auth/auth_screen.dart';
 
 void main() {
   group('AuthScreen widget tests', () {
-    Future<void> openAuthScreen(WidgetTester tester) async {
-      await tester.pumpWidget(const MaterialApp(home: AuthScreen()));
+    Future<MockFirebaseAuth> openAuthScreen(
+      WidgetTester tester, {
+      List<MockUser> users = const [],
+    }) async {
+      final auth = MockFirebaseAuth(mockUser: users.isEmpty ? null : users.first);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AuthScreen(auth: auth),
+        ),
+      );
+
+      return auth;
     }
 
     testWidgets('displays the login form', (tester) async {
@@ -32,8 +44,14 @@ void main() {
     testWidgets('rejects an invalid email address', (tester) async {
       await openAuthScreen(tester);
 
-      await tester.enterText(find.byType(TextFormField).at(0), 'invalid-email');
-      await tester.enterText(find.byType(TextFormField).at(1), 'validpass123');
+      await tester.enterText(
+        find.byType(TextFormField).at(0),
+        'invalid-email',
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(1),
+        'validpass123',
+      );
 
       await tester.ensureVisible(find.text('Sign In'));
       await tester.tap(find.text('Sign In'));
@@ -63,25 +81,36 @@ void main() {
       expect(find.byTooltip('Hide password'), findsOneWidget);
     });
 
-    testWidgets('shows a message when valid credentials are submitted', (
-      tester,
-    ) async {
-      await openAuthScreen(tester);
+
+    testWidgets('signs in with a registered mock user', (tester) async {
+      final mockUser = MockUser(
+        isAnonymous: false,
+        uid: 'test-user',
+        email: 'user@example.com',
+      );
+      final auth = MockFirebaseAuth(
+        mockUser: mockUser,
+        signedIn: false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: AuthScreen(auth: auth)),
+      );
 
       await tester.enterText(
         find.byType(TextFormField).at(0),
         'user@example.com',
       );
-      await tester.enterText(find.byType(TextFormField).at(1), 'validpass123');
+      await tester.enterText(
+        find.byType(TextFormField).at(1),
+        'validpass123',
+      );
 
       await tester.ensureVisible(find.text('Sign In'));
       await tester.tap(find.text('Sign In'));
       await tester.pumpAndSettle();
 
-      expect(
-        find.textContaining('Sign-in verification is not configured yet.'),
-        findsOneWidget,
-      );
+      expect(auth.currentUser, isNotNull);
     });
   });
 }

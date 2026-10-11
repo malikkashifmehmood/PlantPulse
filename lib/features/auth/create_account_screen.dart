@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/app_theme.dart';
@@ -7,7 +8,9 @@ import '../home/home_screen.dart';
 import 'auth_screen.dart';
 
 class CreateAccountScreen extends StatefulWidget {
-  const CreateAccountScreen({super.key});
+  const CreateAccountScreen({super.key, this.auth});
+
+  final FirebaseAuth? auth;
 
   @override
   State<CreateAccountScreen> createState() => _CreateAccountScreenState();
@@ -22,6 +25,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   bool _obscurePassword = true;
   bool _obscureConfirmation = true;
+  bool _isLoading = false;
+
+  FirebaseAuth get _auth => widget.auth ?? FirebaseAuth.instance;
 
   @override
   void dispose() {
@@ -62,27 +68,91 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     return null;
   }
 
-  void _submit() {
+  String _registrationError(FirebaseAuthException error) {
+    switch (error.code) {
+      case 'email-already-in-use':
+        return 'An account with this email already exists.';
+      case 'weak-password':
+        return 'Choose a stronger password.';
+      case 'invalid-email':
+        return 'Enter a valid email address.';
+      case 'network-request-failed':
+        return 'Network error. Check your connection and try again.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      case 'operation-not-allowed':
+        return 'Email registration is currently unavailable.';
+      default:
+        return 'Unable to create your account. Please try again.';
+    }
+  }
+
+  Future<void> _submit() async {
     FocusScope.of(context).unfocus();
 
-    if (!_formKey.currentState!.validate()) {
+    if (_isLoading || !_formKey.currentState!.validate()) {
       return;
     }
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Account registration is not configured yet. '
-            'No account has been created.',
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
+    setState(() => _isLoading = true);
+
+    try {
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
       );
+
+      final user = credential.user;
+
+      if (user == null) {
+        throw FirebaseAuthException(code: 'registration-failed');
+      }
+
+      try {
+        await user.updateDisplayName(_nameController.text.trim());
+      } catch (_) {
+        // The account was created. A display-name update failure should not
+        // be reported as if registration itself failed.
+      }
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(_registrationError(error)),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Unable to create your account. Please try again.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _continueAsGuest() {
+    if (_isLoading) return;
+
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const HomeScreen()),
       (route) => false,
@@ -101,7 +171,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 IconButton(
-                  onPressed: () => Navigator.of(context).maybePop(),
+                  onPressed:
+                      _isLoading
+                          ? null
+                          : () => Navigator.of(context).maybePop(),
                   tooltip: 'Go back',
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
@@ -126,6 +199,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _nameController,
+                  enabled: !_isLoading,
                   textCapitalization: TextCapitalization.words,
                   textInputAction: TextInputAction.next,
                   maxLength: SecurityConstants.maxTextInputLength,
@@ -141,6 +215,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _emailController,
+                  enabled: !_isLoading,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   autocorrect: false,
@@ -159,6 +234,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _passwordController,
+                  enabled: !_isLoading,
                   obscureText: _obscurePassword,
                   textInputAction: TextInputAction.next,
                   autocorrect: false,
@@ -169,11 +245,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     prefixIcon: const Icon(Icons.lock_outline_rounded),
                     counterText: '',
                     suffixIcon: IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
+                      onPressed:
+                          _isLoading
+                              ? null
+                              : () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
                       tooltip:
                           _obscurePassword ? 'Show password' : 'Hide password',
                       icon: Icon(
@@ -197,6 +274,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _confirmPasswordController,
+                  enabled: !_isLoading,
                   obscureText: _obscureConfirmation,
                   textInputAction: TextInputAction.done,
                   autocorrect: false,
@@ -207,11 +285,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     prefixIcon: const Icon(Icons.verified_user_outlined),
                     counterText: '',
                     suffixIcon: IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _obscureConfirmation = !_obscureConfirmation;
-                        });
-                      },
+                      onPressed:
+                          _isLoading
+                              ? null
+                              : () => setState(
+                                () =>
+                                    _obscureConfirmation =
+                                        !_obscureConfirmation,
+                              ),
                       tooltip:
                           _obscureConfirmation
                               ? 'Show password'
@@ -224,37 +305,50 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     ),
                   ),
                   validator: _validateConfirmation,
-                  onFieldSubmitted: (_) => _submit(),
+                  onFieldSubmitted: (_) {
+                    if (!_isLoading) _submit();
+                  },
                 ),
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: _submit,
-                    child: const Text('Create Account'),
+                    onPressed: _isLoading ? null : _submit,
+                    child:
+                        _isLoading
+                            ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Text('Create Account'),
                   ),
                 ),
                 const SizedBox(height: 12),
                 Center(
                   child: TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const AuthScreen()),
-                      );
-                    },
+                    onPressed:
+                        _isLoading
+                            ? null
+                            : () {
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                  builder: (_) => const AuthScreen(),
+                                ),
+                              );
+                            },
                     child: const Text('Already have an account? Sign in'),
                   ),
                 ),
                 Center(
                   child: TextButton(
-                    onPressed: _continueAsGuest,
+                    onPressed: _isLoading ? null : _continueAsGuest,
                     child: const Text('Continue as Guest'),
                   ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Registration is not connected to a server yet. '
-                  'Your account will not be created by this screen.',
+                  'Your account will be created using Firebase Authentication.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: PlantPulseColors.muted,

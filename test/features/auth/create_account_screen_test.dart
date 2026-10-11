@@ -1,13 +1,19 @@
+import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plantpulse/features/auth/create_account_screen.dart';
+import 'package:plantpulse/features/home/home_screen.dart';
 
 void main() {
+  late MockFirebaseAuth mockAuth;
+
   Future<void> openCreateAccountScreen(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 1;
 
-    await tester.pumpWidget(const MaterialApp(home: CreateAccountScreen()));
+    await tester.pumpWidget(
+      MaterialApp(home: CreateAccountScreen(auth: mockAuth)),
+    );
     await tester.pumpAndSettle();
   }
 
@@ -26,6 +32,10 @@ void main() {
     await tester.tap(button);
     await tester.pump();
   }
+
+  setUp(() {
+    mockAuth = MockFirebaseAuth();
+  });
 
   group('CreateAccountScreen', () {
     testWidgets('displays the registration form', (tester) async {
@@ -58,7 +68,6 @@ void main() {
       await tapCreateAccount(tester);
 
       expect(find.text('Enter a valid email address.'), findsOneWidget);
-      expect(find.textContaining('No account has been created.'), findsNothing);
     });
 
     testWidgets('rejects a password shorter than eight characters', (
@@ -121,28 +130,21 @@ void main() {
       );
     });
 
-    testWidgets('valid details show the backend-not-configured message', (
+    testWidgets('creates a mock account and opens the home screen', (
       tester,
     ) async {
       await openCreateAccountScreen(tester);
       await enterValidDetails(tester);
-
-      expect(
-        tester.widget<TextFormField>(fieldAt(1)).controller!.text,
-        'ali@example.com',
-      );
-
       await tapCreateAccount(tester);
+      await tester.pumpAndSettle();
 
-      expect(find.byType(SnackBar), findsOneWidget);
-      expect(
-        find.textContaining('Account registration is not configured yet.'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('No account has been created.'),
-        findsOneWidget,
-      );
+      final user = mockAuth.currentUser;
+
+      expect(user, isNotNull);
+      expect(user!.email, 'ali@example.com');
+      expect(user.displayName, 'Ali Khan');
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.text('Create account'), findsNothing);
     });
   });
 }
