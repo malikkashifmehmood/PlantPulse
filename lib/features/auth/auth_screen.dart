@@ -48,9 +48,7 @@ class _AuthScreenState extends State<AuthScreen> {
       if (!mounted) return;
 
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(
-          builder: (_) => const HomeScreen(),
-        ),
+        MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
         (route) => false,
       );
     } on FirebaseAuthException catch (error) {
@@ -63,16 +61,22 @@ class _AuthScreenState extends State<AuthScreen> {
         case 'wrong-password':
         case 'user-not-found':
           message = 'Invalid email or password.';
+          break;
         case 'invalid-email':
           message = 'Enter a valid email address.';
+          break;
         case 'user-disabled':
           message = 'This account has been disabled. Contact support.';
+          break;
         case 'too-many-requests':
           message = 'Too many attempts. Please wait before trying again.';
+          break;
         case 'network-request-failed':
           message = 'Network error. Check your internet connection.';
+          break;
         case 'operation-not-allowed':
           message = 'Email and password sign-in is not enabled.';
+          break;
         default:
           message = 'Unable to sign in. Please try again.';
       }
@@ -131,45 +135,40 @@ class _AuthScreenState extends State<AuthScreen> {
 
   void _continueAsGuest() {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => const HomeScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
     );
   }
 
   void _openCreateAccount() {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const CreateAccountScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const CreateAccountScreen()),
     );
   }
 
   void _showUnavailable(String feature) {
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('$feature unavailable'),
-        content: Text(
-          '$feature sign-in is not configured yet. '
-          'Please use email and password instead.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('OK'),
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text('$feature unavailable'),
+            content: Text(
+              '$feature sign-in is not configured yet. '
+              'Please use email and password instead.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('OK'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -181,10 +180,7 @@ class _AuthScreenState extends State<AuthScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 24,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
               child: Form(
@@ -211,17 +207,16 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ),
                     const SizedBox(height: 32),
-                    Text(
-                      'Email',
-                      style: theme.textTheme.labelLarge,
-                    ),
+                    Text('Email', style: theme.textTheme.labelLarge),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.email],
-                      validator: (String? value) => CredentialValidator.validateEmail(value ?? ''),
+                      validator:
+                          (value) =>
+                              CredentialValidator.validateEmail(value ?? ''),
                       decoration: const InputDecoration(
                         hintText: 'you@example.com',
                         prefixIcon: Icon(Icons.email_outlined),
@@ -229,26 +224,26 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Text(
-                      'Password',
-                      style: theme.textTheme.labelLarge,
-                    ),
+                    Text('Password', style: theme.textTheme.labelLarge),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
                       textInputAction: TextInputAction.done,
                       autofillHints: const [AutofillHints.password],
-                      validator: (String? value) => CredentialValidator.validatePassword(value ?? ''),
+                      validator:
+                          (value) =>
+                              CredentialValidator.validatePassword(value ?? ''),
                       onFieldSubmitted: (_) => _submit(),
                       decoration: InputDecoration(
                         hintText: 'Enter your password',
                         prefixIcon: const Icon(Icons.lock_outline),
                         border: const OutlineInputBorder(),
                         suffixIcon: IconButton(
-                          tooltip: _obscurePassword
-                              ? 'Show password'
-                              : 'Hide password',
+                          tooltip:
+                              _obscurePassword
+                                  ? 'Show password'
+                                  : 'Hide password',
                           onPressed: () {
                             setState(() {
                               _obscurePassword = !_obscurePassword;
@@ -265,17 +260,17 @@ class _AuthScreenState extends State<AuthScreen> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed:
-                            _isSendingReset ? null : _sendPasswordReset,
-                        child: _isSendingReset
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Forgot password?'),
+                        onPressed: _isSendingReset ? null : _sendPasswordReset,
+                        child:
+                            _isSendingReset
+                                ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : const Text('Forgot password?'),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -283,15 +278,16 @@ class _AuthScreenState extends State<AuthScreen> {
                       height: 52,
                       child: FilledButton(
                         onPressed: _isSigningIn ? null : _submit,
-                        child: _isSigningIn
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Sign In'),
+                        child:
+                            _isSigningIn
+                                ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : const Text('Sign In'),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -331,9 +327,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Flexible(
-                          child: Text("New here? "),
-                        ),
+                        const Flexible(child: Text('New here? ')),
                         Flexible(
                           child: TextButton(
                             onPressed: _openCreateAccount,
@@ -396,10 +390,7 @@ class _OrDivider extends StatelessWidget {
         Expanded(child: Divider(color: color)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'OR',
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
+          child: Text('OR', style: Theme.of(context).textTheme.labelSmall),
         ),
         Expanded(child: Divider(color: color)),
       ],
