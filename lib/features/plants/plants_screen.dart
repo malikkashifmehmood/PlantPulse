@@ -1,84 +1,397 @@
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../../app/app_theme.dart';
-import '../../shared/widgets/plantpulse_scaffold.dart';
-import 'plant_detail_screen.dart';
 
-class PlantsScreen extends StatelessWidget {
+import '../../app/app.dart';
+import '../../app/app_theme.dart';
+import '../../core/models/plant.dart';
+import 'data/plant_repository.dart';
+import '../../shared/widgets/plantpulse_scaffold.dart';
+
+class PlantsScreen extends StatefulWidget {
   const PlantsScreen({super.key});
 
   @override
+  State<PlantsScreen> createState() => _PlantsScreenState();
+}
+
+class _PlantsScreenState extends State<PlantsScreen> {
+  final _searchController = TextEditingController();
+
+  PlantRepository? _repository;
+  late final String _scope;
+
+  List<Plant> _plants = [];
+  bool _isLoading = true;
+  String? _error;
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+
+    _scope = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_repository == null) {
+      _repository = AppServicesScope.of(context).plants;
+      _loadPlants();
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    if (!mounted) return;
+
+    setState(() {
+      _searchQuery = _searchController.text.trim().toLowerCase();
+    });
+  }
+
+  Future<void> _loadPlants() async {
+    try {
+      final plants = _repository!.loadPlants(_scope);
+
+      if (!mounted) return;
+
+      setState(() {
+        _plants = plants;
+        _error = null;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = 'Unable to load your plants. Please try again.';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _addPlant() async {
+    final result = await showDialog<Plant>(
+      context: context,
+      builder: (_) => const _AddPlantDialog(),
+    );
+
+    if (result == null || !mounted) return;
+
+    try {
+      await _repository!.savePlant(_scope, result);
+      await _loadPlants();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Plant saved successfully.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not save the plant. Please try again.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deletePlant(Plant plant) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('Delete plant?'),
+            content: Text('Remove "${plant.name}" from your plants?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await _repository!.deletePlant(_scope, plant.id);
+      await _loadPlants();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Plant deleted.')));
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not delete the plant. Please try again.'),
+        ),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final visiblePlants =
+        _plants.where((plant) {
+          return plant.name.toLowerCase().contains(_searchQuery) ||
+              plant.species.toLowerCase().contains(_searchQuery);
+        }).toList();
+
     return PlantPulseScaffold(
       currentIndex: 1,
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             PageHeader(
               title: 'My Plants',
-              subtitle: '12 monitored plants',
+              subtitle:
+                  '${_plants.length} ${_plants.length == 1 ? 'plant' : 'plants'} saved',
               trailing: IconButton.filledTonal(
-                onPressed: () {},
+                tooltip: 'Add plant',
+                onPressed: _isLoading ? null : _addPlant,
                 icon: const Icon(Icons.add_rounded),
               ),
             ),
             const SizedBox(height: 18),
-            const TextField(
+            TextField(
+              controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search plants',
-                prefixIcon: Icon(Icons.search_rounded),
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon:
+                    _searchQuery.isEmpty
+                        ? null
+                        : IconButton(
+                          tooltip: 'Clear search',
+                          onPressed: _searchController.clear,
+                          icon: const Icon(Icons.close_rounded),
+                        ),
               ),
             ),
-            const SizedBox(height: 14),
-            const Row(
-              children: [
-                StatusPill(
-                  text: 'All 12',
-                  background: PlantPulseColors.mint,
-                  foreground: PlantPulseColors.green,
+            const SizedBox(height: 18),
+            if (_isLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(36),
+                  child: CircularProgressIndicator(),
                 ),
-                SizedBox(width: 8),
-                StatusPill(
-                  text: 'Healthy 10',
-                  background: Colors.white,
-                  foreground: PlantPulseColors.muted,
+              )
+            else if (_error != null)
+              _MessageState(
+                icon: Icons.cloud_off_rounded,
+                message: _error!,
+                actionLabel: 'Try again',
+                onAction: () {
+                  setState(() => _isLoading = true);
+                  _loadPlants();
+                },
+              )
+            else if (visiblePlants.isEmpty)
+              _MessageState(
+                icon: Icons.eco_outlined,
+                message:
+                    _searchQuery.isNotEmpty
+                        ? 'No plants match your search.'
+                        : 'Your garden starts here. Add your first plant to keep track of it.',
+                actionLabel: _searchQuery.isNotEmpty ? null : 'Add a plant',
+                onAction: _searchQuery.isNotEmpty ? null : _addPlant,
+              )
+            else ...[
+              Row(
+                children: [
+                  StatusPill(
+                    text: 'All ${_plants.length}',
+                    background: PlantPulseColors.mint,
+                    foreground: PlantPulseColors.green,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ...visiblePlants.map(
+                (plant) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _PlantCard(
+                    plant: plant,
+                    onDelete: () => _deletePlant(plant),
+                  ),
                 ),
-                SizedBox(width: 8),
-                StatusPill(
-                  text: 'Attention 2',
-                  background: PlantPulseColors.warningBg,
-                  foreground: PlantPulseColors.warning,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddPlantDialog extends StatefulWidget {
+  const _AddPlantDialog();
+
+  @override
+  State<_AddPlantDialog> createState() => _AddPlantDialogState();
+}
+
+class _AddPlantDialogState extends State<_AddPlantDialog> {
+  final _nameController = TextEditingController();
+  final _speciesController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _speciesController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+
+    final now = DateTime.now();
+
+    Navigator.of(context).pop(
+      Plant(
+        id: now.microsecondsSinceEpoch.toString(),
+        name: _nameController.text.trim(),
+        species: _speciesController.text.trim(),
+        createdAt: now,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add a plant'),
+      content: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nameController,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                maxLength: 60,
+                decoration: const InputDecoration(
+                  labelText: 'Plant name',
+                  hintText: 'e.g. Tomato Roma',
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _PlantCard(
-              name: 'Tomato Roma',
-              detail: 'Last scan today',
-              status: 'Attention',
-              danger: true,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PlantDetailScreen()),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Enter a plant name.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _speciesController,
+                textCapitalization: TextCapitalization.words,
+                maxLength: 60,
+                decoration: const InputDecoration(
+                  labelText: 'Species',
+                  hintText: 'e.g. Tomato',
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Enter the plant species.';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Add plant')),
+      ],
+    );
+  }
+}
+
+class _PlantCard extends StatelessWidget {
+  const _PlantCard({required this.plant, required this.onDelete});
+
+  final Plant plant;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = plant.createdAt.toLocal();
+    final formattedDate =
+        '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.year}';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            const PlantIcon(size: 54),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    plant.name,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    plant.species,
+                    style: const TextStyle(
+                      color: PlantPulseColors.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Added $formattedDate',
+                    style: const TextStyle(
+                      color: PlantPulseColors.muted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 10),
-            const _PlantCard(
-              name: 'Green Pepper',
-              detail: 'Last scan 2 days ago',
-              status: 'Healthy',
-            ),
-            const SizedBox(height: 10),
-            const _PlantCard(
-              name: 'Potato',
-              detail: 'Last scan yesterday',
-              status: 'Healthy',
-            ),
-            const SizedBox(height: 10),
-            const _PlantCard(
-              name: 'Cucumber',
-              detail: 'Last scan 4 days ago',
-              status: 'Healthy',
+            IconButton(
+              tooltip: 'Delete ${plant.name}',
+              onPressed: onDelete,
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                color: PlantPulseColors.muted,
+              ),
             ),
           ],
         ),
@@ -87,60 +400,41 @@ class PlantsScreen extends StatelessWidget {
   }
 }
 
-class _PlantCard extends StatelessWidget {
-  final String name;
-  final String detail;
-  final String status;
-  final bool danger;
-  final VoidCallback? onTap;
-
-  const _PlantCard({
-    required this.name,
-    required this.detail,
-    required this.status,
-    this.danger = false,
-    this.onTap,
+class _MessageState extends StatelessWidget {
+  const _MessageState({
+    required this.icon,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
   });
+
+  final IconData icon;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              const PlantIcon(size: 54),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name, style: const TextStyle(fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 4),
-                    Text(detail, style: const TextStyle(color: PlantPulseColors.muted, fontSize: 11)),
-                  ],
-                ),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+        child: Column(
+          children: [
+            Icon(icon, size: 48, color: PlantPulseColors.green),
+            const SizedBox(height: 14),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: PlantPulseColors.muted,
+                height: 1.5,
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  StatusPill(
-                    text: status,
-                    background: danger ? PlantPulseColors.dangerBg : PlantPulseColors.successBg,
-                    foreground: danger ? PlantPulseColors.danger : PlantPulseColors.green,
-                  ),
-                  if (onTap != null)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 5),
-                      child: Icon(Icons.chevron_right_rounded, size: 18),
-                    ),
-                ],
-              ),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 16),
+              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
             ],
-          ),
+          ],
         ),
       ),
     );

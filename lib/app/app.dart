@@ -4,6 +4,30 @@ import '../core/app_services.dart';
 import '../features/splash/splash_screen.dart';
 import 'app_theme.dart';
 
+class AppServicesScope extends InheritedWidget {
+  const AppServicesScope({
+    super.key,
+    required this.services,
+    required super.child,
+  });
+
+  final AppServices services;
+
+  static AppServices of(BuildContext context) {
+    final scope =
+        context.dependOnInheritedWidgetOfExactType<AppServicesScope>();
+
+    assert(scope != null, 'AppServicesScope was not found in the widget tree.');
+
+    return scope!.services;
+  }
+
+  @override
+  bool updateShouldNotify(AppServicesScope oldWidget) {
+    return services != oldWidget.services;
+  }
+}
+
 class PlantPulseApp extends StatefulWidget {
   const PlantPulseApp({super.key, required this.services});
 
@@ -44,11 +68,14 @@ class _PlantPulseAppState extends State<PlantPulseApp>
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'PlantPulse',
-      debugShowCheckedModeBanner: false,
-      theme: buildPlantPulseTheme(),
-      home: const SplashScreen(),
+    return AppServicesScope(
+      services: widget.services,
+      child: MaterialApp(
+        title: 'PlantPulse',
+        debugShowCheckedModeBanner: false,
+        theme: buildPlantPulseTheme(),
+        home: const SplashScreen(),
+      ),
     );
   }
 }
