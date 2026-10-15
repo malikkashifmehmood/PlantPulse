@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../features/diagnosis/data/diagnosis_repository.dart';
 import '../features/plants/data/plant_repository.dart';
 import 'security/secure_storage_service.dart';
 import 'security/security_service.dart';
@@ -13,6 +14,7 @@ class AppServices {
     required this.preferences,
     required this.security,
     required this.plants,
+    required this.diagnoses,
   });
 
   final SecureStorageService secureStorage;
@@ -20,6 +22,7 @@ class AppServices {
   final AppPreferencesRepository preferences;
   final SecurityService security;
   final PlantRepository plants;
+  final DiagnosisRepository diagnoses;
 
   static Future<AppServices> create() async {
     final sharedPreferences = await SharedPreferences.getInstance();
@@ -28,6 +31,7 @@ class AppServices {
     final preferences = AppPreferencesRepository(localStorage);
     final security = SecurityService(secureStorage: secureStorage);
     final plants = PlantRepository(localStorage);
+    final diagnoses = DiagnosisRepository(localStorage);
 
     return AppServices._(
       secureStorage: secureStorage,
@@ -35,6 +39,7 @@ class AppServices {
       preferences: preferences,
       security: security,
       plants: plants,
+      diagnoses: diagnoses,
     );
   }
 }

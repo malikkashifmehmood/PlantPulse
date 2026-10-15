@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import '../../app/app.dart';
 import '../../app/app_theme.dart';
 import '../../core/models/plant.dart';
-import 'data/plant_repository.dart';
 import '../../shared/widgets/plantpulse_scaffold.dart';
+import 'data/plant_repository.dart';
+import 'plant_detail_screen.dart';
 
 class PlantsScreen extends StatefulWidget {
   const PlantsScreen({super.key});
@@ -113,7 +114,9 @@ class _PlantsScreenState extends State<PlantsScreen> {
       builder:
           (dialogContext) => AlertDialog(
             title: const Text('Delete plant?'),
-            content: Text('Remove "${plant.name}" from your plants?'),
+            content: Text(
+              'Remove "${plant.name}" and its saved diagnosis history?',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
@@ -130,23 +133,36 @@ class _PlantsScreenState extends State<PlantsScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
+      final services = AppServicesScope.of(context);
+
       await _repository!.deletePlant(_scope, plant.id);
+      await services.diagnoses.deleteForPlant(_scope, plant.id);
       await _loadPlants();
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Plant deleted.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Plant and its diagnosis history deleted.'),
+        ),
+      );
     } catch (_) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not delete the plant. Please try again.'),
+          content: Text('Could not complete deletion. Please try again.'),
         ),
       );
+      await _loadPlants();
     }
+  }
+
+  void _openPlant(Plant plant) {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => PlantDetailScreen(plant: plant)),
+    );
   }
 
   @override
@@ -167,7 +183,8 @@ class _PlantsScreenState extends State<PlantsScreen> {
             PageHeader(
               title: 'My Plants',
               subtitle:
-                  '${_plants.length} ${_plants.length == 1 ? 'plant' : 'plants'} saved',
+                  '${_plants.length} '
+                  '${_plants.length == 1 ? 'plant' : 'plants'} saved',
               trailing: IconButton.filledTonal(
                 tooltip: 'Add plant',
                 onPressed: _isLoading ? null : _addPlant,
@@ -221,10 +238,31 @@ class _PlantsScreenState extends State<PlantsScreen> {
             else ...[
               Row(
                 children: [
-                  StatusPill(
-                    text: 'All ${_plants.length}',
-                    background: PlantPulseColors.mint,
-                    foreground: PlantPulseColors.green,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: PlantPulseColors.mint,
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: Text(
+                      'All ${_plants.length}',
+                      style: const TextStyle(
+                        color: PlantPulseColors.green,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  const Text(
+                    'Tap a plant for details',
+                    style: TextStyle(
+                      color: PlantPulseColors.muted,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -234,6 +272,7 @@ class _PlantsScreenState extends State<PlantsScreen> {
                   padding: const EdgeInsets.only(bottom: 10),
                   child: _PlantCard(
                     plant: plant,
+                    onTap: () => _openPlant(plant),
                     onDelete: () => _deletePlant(plant),
                   ),
                 ),
@@ -338,62 +377,81 @@ class _AddPlantDialogState extends State<_AddPlantDialog> {
 }
 
 class _PlantCard extends StatelessWidget {
-  const _PlantCard({required this.plant, required this.onDelete});
+  const _PlantCard({
+    required this.plant,
+    required this.onTap,
+    required this.onDelete,
+  });
 
   final Plant plant;
+  final VoidCallback onTap;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final date = plant.createdAt.toLocal();
+
     final formattedDate =
         '${date.day.toString().padLeft(2, '0')}/'
         '${date.month.toString().padLeft(2, '0')}/'
         '${date.year}';
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            const PlantIcon(size: 54),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    plant.name,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    plant.species,
-                    style: const TextStyle(
-                      color: PlantPulseColors.muted,
-                      fontSize: 12,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              const PlantIcon(size: 54),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      plant.name,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Added $formattedDate',
-                    style: const TextStyle(
-                      color: PlantPulseColors.muted,
-                      fontSize: 11,
+                    const SizedBox(height: 4),
+                    Text(
+                      plant.species,
+                      style: const TextStyle(
+                        color: PlantPulseColors.muted,
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      'Added $formattedDate',
+                      style: const TextStyle(
+                        color: PlantPulseColors.muted,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    const Text(
+                      'View plant details →',
+                      style: TextStyle(
+                        color: PlantPulseColors.green,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            IconButton(
-              tooltip: 'Delete ${plant.name}',
-              onPressed: onDelete,
-              icon: const Icon(
-                Icons.delete_outline_rounded,
-                color: PlantPulseColors.muted,
+              IconButton(
+                tooltip: 'Delete ${plant.name}',
+                onPressed: onDelete,
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: PlantPulseColors.muted,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

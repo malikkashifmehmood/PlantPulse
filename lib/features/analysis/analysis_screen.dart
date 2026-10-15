@@ -1,37 +1,51 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../../app/app_theme.dart';
+import '../../core/models/plant.dart';
 import '../diagnosis/diagnosis_screen.dart';
 import '../scan/low_confidence_screen.dart';
 
 class AnalysisScreen extends StatefulWidget {
-  const AnalysisScreen({super.key});
+  const AnalysisScreen({super.key, this.plant});
+
+  final Plant? plant;
 
   @override
   State<AnalysisScreen> createState() => _AnalysisScreenState();
 }
 
 class _AnalysisScreenState extends State<AnalysisScreen> {
-  double progress = .0;
+  double progress = 0.0;
   Timer? timer;
 
   @override
   void initState() {
     super.initState();
+
     timer = Timer.periodic(const Duration(milliseconds: 180), (t) {
-      if (!mounted) return;
-      setState(() {
-        progress = (progress + .035).clamp(0, 1);
-      });
-      if (progress >= 1) {
+      if (!mounted) {
         t.cancel();
+        return;
+      }
+
+      setState(() {
+        progress = (progress + .035).clamp(0.0, 1.0);
+      });
+
+      if (progress >= 1.0) {
+        t.cancel();
+
         Future.delayed(const Duration(milliseconds: 350), () {
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const DiagnosisScreen()),
-            );
-          }
+          if (!mounted) return;
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => DiagnosisScreen(plant: widget.plant),
+            ),
+          );
         });
       }
     });
@@ -46,6 +60,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   @override
   Widget build(BuildContext context) {
     final percent = (progress * 100).round();
+
     final steps = [
       ('Image quality', progress > .12),
       ('Leaf segmentation', progress > .30),
@@ -130,15 +145,18 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                   ? Icons.check_circle_rounded
                                   : Icons.radio_button_unchecked_rounded,
                               size: 20,
-                              color: step.$2
-                                  ? PlantPulseColors.green
-                                  : PlantPulseColors.line,
+                              color:
+                                  step.$2
+                                      ? PlantPulseColors.green
+                                      : PlantPulseColors.line,
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 step.$1,
-                                style: const TextStyle(fontWeight: FontWeight.w700),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                           ],
@@ -153,7 +171,9 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
               onPressed: () {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => const LowConfidenceScreen()),
+                  MaterialPageRoute<void>(
+                    builder: (_) => const LowConfidenceScreen(),
+                  ),
                 );
               },
               child: const Text('Preview low-confidence state'),

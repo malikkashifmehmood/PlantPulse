@@ -1,9 +1,15 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../../app/app.dart';
+import '../../core/models/plant.dart';
 import '../../shared/widgets/plantpulse_scaffold.dart';
 import '../analysis/analysis_screen.dart';
 
 class ScanScreen extends StatefulWidget {
-  const ScanScreen({super.key});
+  const ScanScreen({super.key, this.plant});
+
+  final Plant? plant;
 
   @override
   State<ScanScreen> createState() => _ScanScreenState();
@@ -11,12 +17,91 @@ class ScanScreen extends StatefulWidget {
 
 class _ScanScreenState extends State<ScanScreen> {
   bool flash = false;
+  bool _openingAnalysis = false;
 
-  void capture() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const AnalysisScreen()),
-    );
+  String get _scope => FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+
+  Future<void> capture() async {
+    if (_openingAnalysis) return;
+
+    setState(() => _openingAnalysis = true);
+
+    try {
+      Plant? selectedPlant = widget.plant;
+
+      if (selectedPlant == null) {
+        final plants = AppServicesScope.of(context).plants.loadPlants(_scope);
+
+        if (plants.isEmpty) {
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Add a plant in My Plants before starting a scan.'),
+            ),
+          );
+          return;
+        }
+
+        selectedPlant = await showDialog<Plant>(
+          context: context,
+          builder:
+              (dialogContext) => AlertDialog(
+                title: const Text('Choose a plant'),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: plants.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final plant = plants[index];
+
+                      return ListTile(
+                        leading: const Icon(
+                          Icons.eco_rounded,
+                          color: Color(0xFF36764A),
+                        ),
+                        title: Text(plant.name),
+                        subtitle: Text(plant.species),
+                        onTap: () {
+                          Navigator.pop(dialogContext, plant);
+                        },
+                      );
+                    },
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+        );
+
+        if (selectedPlant == null || !mounted) return;
+      }
+
+      Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => AnalysisScreen(plant: selectedPlant!),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to start the scan. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _openingAnalysis = false);
+      }
+    }
   }
 
   @override
@@ -42,10 +127,14 @@ class _ScanScreenState extends State<ScanScreen> {
                           onTap: () => Navigator.pop(context),
                         ),
                         const SizedBox(width: 12),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'Scan Leaf',
-                            style: TextStyle(
+                            widget.plant == null
+                                ? 'Scan Leaf'
+                                : 'Scan ${widget.plant!.name}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
@@ -107,9 +196,19 @@ class _ScanScreenState extends State<ScanScreen> {
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white70, fontSize: 11),
                         ),
+                        if (widget.plant != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Plant: ${widget.plant!.name}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 18),
                         GestureDetector(
-                          onTap: capture,
+                          onTap: _openingAnalysis ? null : capture,
                           child: Container(
                             width: 76,
                             height: 76,
@@ -123,6 +222,15 @@ class _ScanScreenState extends State<ScanScreen> {
                                 shape: BoxShape.circle,
                                 color: Colors.white,
                               ),
+                              child:
+                                  _openingAnalysis
+                                      ? const Padding(
+                                        padding: EdgeInsets.all(15),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 3,
+                                        ),
+                                      )
+                                      : null,
                             ),
                           ),
                         ),
@@ -140,10 +248,10 @@ class _ScanScreenState extends State<ScanScreen> {
 }
 
 class _CircleButton extends StatelessWidget {
+  const _CircleButton({required this.icon, required this.onTap});
+
   final IconData icon;
   final VoidCallback onTap;
-
-  const _CircleButton({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -165,14 +273,15 @@ class _CircleButton extends StatelessWidget {
 class _CameraTexturePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final p =
+    final paint =
         Paint()
           ..shader = const LinearGradient(
             colors: [Color(0xFF223F2C), Color(0xFF516D45), Color(0xFF1E3024)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ).createShader(Offset.zero & size);
-    canvas.drawRect(Offset.zero & size, p);
+
+    canvas.drawRect(Offset.zero & size, paint);
   }
 
   @override
@@ -182,10 +291,11 @@ class _CameraTexturePainter extends CustomPainter {
 class _LeafPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final p =
+    final paint =
         Paint()
           ..color = const Color(0xFF72B96B).withValues(alpha: .72)
           ..style = PaintingStyle.fill;
+
     final path =
         Path()
           ..moveTo(size.width * .50, size.height * .83)
@@ -206,12 +316,15 @@ class _LeafPainter extends CustomPainter {
             size.height * .83,
           )
           ..close();
-    canvas.drawPath(path, p);
+
+    canvas.drawPath(path, paint);
+
     final vein =
         Paint()
           ..color = Colors.white.withValues(alpha: .65)
           ..strokeWidth = 3
           ..style = PaintingStyle.stroke;
+
     canvas.drawLine(
       Offset(size.width * .50, size.height * .82),
       Offset(size.width * .56, size.height * .13),

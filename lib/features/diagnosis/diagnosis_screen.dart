@@ -1,14 +1,97 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../../app/app.dart';
 import '../../app/app_theme.dart';
+import '../../core/models/plant.dart';
+import '../../core/models/plant_diagnosis.dart';
 import '../../shared/widgets/plantpulse_scaffold.dart';
 import '../expert/expert_screen.dart';
 import '../treatment/treatment_screen.dart';
 
-class DiagnosisScreen extends StatelessWidget {
-  const DiagnosisScreen({super.key});
+class DiagnosisScreen extends StatefulWidget {
+  const DiagnosisScreen({super.key, this.plant});
+
+  final Plant? plant;
+
+  @override
+  State<DiagnosisScreen> createState() => _DiagnosisScreenState();
+}
+
+class _DiagnosisScreenState extends State<DiagnosisScreen> {
+  bool _saving = false;
+  bool _saved = false;
+  bool _saveAttempted = false;
+
+  String get _scope => FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.plant != null) {
+        _saveDiagnosis();
+      }
+    });
+  }
+
+  Future<void> _saveDiagnosis() async {
+    final plant = widget.plant;
+
+    if (plant == null || _saving || _saved || _saveAttempted) {
+      return;
+    }
+
+    _saving = true;
+    _saveAttempted = true;
+
+    try {
+      final diagnosis = PlantDiagnosis(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        plantId: plant.id,
+        plantName: plant.name,
+        species: plant.species,
+        result: 'Early Blight',
+        confidence: 0.92,
+        symptoms: const [
+          'Circular brown lesions',
+          'Yellowing around affected areas',
+          'Leaf deterioration',
+        ],
+        createdAt: DateTime.now(),
+      );
+
+      await AppServicesScope.of(
+        context,
+      ).diagnoses.saveDiagnosis(_scope, diagnosis);
+
+      if (!mounted) return;
+
+      setState(() {
+        _saved = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Diagnosis saved for ${plant.name}.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not save diagnosis. Please try Save again.'),
+        ),
+      );
+    } finally {
+      _saving = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final plant = widget.plant;
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -17,7 +100,13 @@ class DiagnosisScreen extends StatelessWidget {
         ),
         title: const Text('Diagnosis'),
         actions: [
-          IconButton(onPressed: () {}, icon: const Icon(Icons.bookmark_border_rounded)),
+          IconButton(
+            onPressed: _saving ? null : _saveDiagnosis,
+            icon: Icon(
+              _saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+            ),
+            tooltip: _saved ? 'Saved' : 'Save diagnosis',
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -37,7 +126,11 @@ class DiagnosisScreen extends StatelessWidget {
                 ),
               ),
               child: const Center(
-                child: Icon(Icons.eco_rounded, size: 100, color: PlantPulseColors.green),
+                child: Icon(
+                  Icons.eco_rounded,
+                  size: 100,
+                  color: PlantPulseColors.green,
+                ),
               ),
             ),
             const SizedBox(height: 18),
@@ -57,10 +150,31 @@ class DiagnosisScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Tomato Roma • Scan just now',
-              style: TextStyle(color: PlantPulseColors.muted, fontSize: 12),
+            Text(
+              plant == null
+                  ? 'Demo result • No plant selected'
+                  : '${plant.name} • ${plant.species}',
+              style: const TextStyle(
+                color: PlantPulseColors.muted,
+                fontSize: 12,
+              ),
             ),
+            if (plant != null) ...[
+              const SizedBox(height: 5),
+              Text(
+                _saved
+                    ? 'Diagnosis saved to this plant’s history'
+                    : _saving
+                    ? 'Saving diagnosis...'
+                    : 'Diagnosis will be saved to this plant’s history',
+                style: TextStyle(
+                  color:
+                      _saved ? PlantPulseColors.green : PlantPulseColors.muted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             const _ConfidenceCard(),
             const SizedBox(height: 18),
@@ -73,11 +187,41 @@ class DiagnosisScreen extends StatelessWidget {
             const _Symptom(text: 'Yellowing around affected areas'),
             const _Symptom(text: 'Leaf deterioration'),
             const SizedBox(height: 18),
-            FilledButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const TreatmentScreen()),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: PlantPulseColors.warningBg,
+                borderRadius: BorderRadius.circular(12),
               ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 20,
+                    color: PlantPulseColors.warning,
+                  ),
+                  SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'Demo diagnosis: the disease and confidence shown '
+                      'are sample values, not predictions from a trained '
+                      'plant-detection model.',
+                      style: TextStyle(fontSize: 12, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            FilledButton(
+              onPressed:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const TreatmentScreen(),
+                    ),
+                  ),
               child: const Text('View Treatment Plan'),
             ),
             const SizedBox(height: 10),
@@ -85,18 +229,31 @@ class DiagnosisScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.bookmark_border_rounded),
-                    label: const Text('Save'),
+                    onPressed: _saving ? null : _saveDiagnosis,
+                    icon: Icon(
+                      _saved
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                    ),
+                    label: Text(
+                      _saving
+                          ? 'Saving...'
+                          : _saved
+                          ? 'Saved'
+                          : 'Save',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ExpertScreen()),
-                    ),
+                    onPressed:
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ExpertScreen(),
+                          ),
+                        ),
                     icon: const Icon(Icons.support_agent_rounded),
                     label: const Text('Expert'),
                   ),
@@ -144,11 +301,19 @@ class _ConfidenceCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('AI confidence', style: TextStyle(fontWeight: FontWeight.w900)),
+                  Text(
+                    'Demo confidence',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
                   SizedBox(height: 4),
                   Text(
-                    'This result is based on the visible features in the captured image.',
-                    style: TextStyle(color: PlantPulseColors.muted, fontSize: 11, height: 1.4),
+                    'The displayed percentage is a sample value. '
+                    'Real confidence requires an actual model prediction.',
+                    style: TextStyle(
+                      color: PlantPulseColors.muted,
+                      fontSize: 11,
+                      height: 1.4,
+                    ),
                   ),
                 ],
               ),
@@ -161,9 +326,9 @@ class _ConfidenceCard extends StatelessWidget {
 }
 
 class _Symptom extends StatelessWidget {
-  final String text;
-
   const _Symptom({required this.text});
+
+  final String text;
 
   @override
   Widget build(BuildContext context) {
@@ -171,9 +336,13 @@ class _Symptom extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          const Icon(Icons.check_circle_rounded, color: PlantPulseColors.green, size: 19),
+          const Icon(
+            Icons.check_circle_rounded,
+            color: PlantPulseColors.green,
+            size: 19,
+          ),
           const SizedBox(width: 9),
-          Text(text),
+          Expanded(child: Text(text)),
         ],
       ),
     );

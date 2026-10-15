@@ -1,32 +1,115 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../../app/app.dart';
 import '../../app/app_theme.dart';
-import '../../shared/widgets/plantpulse_scaffold.dart';
+import '../../core/models/plant.dart';
+import '../../core/models/plant_diagnosis.dart';
 import '../scan/scan_screen.dart';
 
-class PlantDetailScreen extends StatelessWidget {
-  const PlantDetailScreen({super.key});
+class PlantDetailScreen extends StatefulWidget {
+  const PlantDetailScreen({super.key, required this.plant});
+
+  final Plant plant;
+
+  @override
+  State<PlantDetailScreen> createState() => _PlantDetailScreenState();
+}
+
+class _PlantDetailScreenState extends State<PlantDetailScreen> {
+  List<PlantDiagnosis> _diagnoses = [];
+  bool _isLoading = true;
+  String? _error;
+  bool _loaded = false;
+
+  String get _scope => FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (!_loaded) {
+      _loaded = true;
+      _loadDiagnoses();
+    }
+  }
+
+  void _loadDiagnoses() {
+    try {
+      final records = AppServicesScope.of(
+        context,
+      ).diagnoses.loadForPlant(_scope, widget.plant.id);
+
+      if (!mounted) return;
+
+      setState(() {
+        _diagnoses = records;
+        _isLoading = false;
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = 'Unable to load this plant\'s diagnosis history.';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _scanThisPlant() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(builder: (_) => ScanScreen(plant: widget.plant)),
+    );
+
+    if (mounted) {
+      _loadDiagnoses();
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final local = date.toLocal();
+
+    return '${local.day.toString().padLeft(2, '0')}/'
+        '${local.month.toString().padLeft(2, '0')}/'
+        '${local.year}';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final plant = widget.plant;
+    final latest = _diagnoses.isEmpty ? null : _diagnoses.first;
+
+    final String status;
+    final Color statusBackground;
+    final Color statusForeground;
+
+    if (latest == null) {
+      status = 'Not yet diagnosed';
+      statusBackground = Colors.grey.shade100;
+      statusForeground = PlantPulseColors.muted;
+    } else if (latest.isHealthy) {
+      status = 'Healthy';
+      statusBackground = PlantPulseColors.successBg;
+      statusForeground = PlantPulseColors.green;
+    } else {
+      status = latest.result;
+      statusBackground = PlantPulseColors.warningBg;
+      statusForeground = PlantPulseColors.warning;
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => Navigator.pop(context),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: const Text('Plant Detail'),
-        actions: [
-          IconButton(onPressed: () {}, icon: const Icon(Icons.edit_outlined)),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      appBar: AppBar(title: const Text('Plant Details')),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _loadDiagnoses();
+        },
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
           children: [
             Container(
-              height: 180,
-              width: double.infinity,
+              height: 170,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(26),
                 gradient: const LinearGradient(
@@ -39,162 +122,191 @@ class PlantDetailScreen extends StatelessWidget {
                 child: Icon(Icons.eco_rounded, color: Colors.white, size: 82),
               ),
             ),
-            const SizedBox(height: 16),
-            const Row(
+            const SizedBox(height: 18),
+            Text(
+              plant.name,
+              style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              plant.species,
+              style: const TextStyle(
+                color: PlantPulseColors.muted,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Expanded(
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusBackground,
+                    borderRadius: BorderRadius.circular(30),
+                  ),
                   child: Text(
-                    'Tomato Roma',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+                    status,
+                    style: TextStyle(
+                      color: statusForeground,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-                StatusPill(
-                  text: 'Attention',
-                  background: PlantPulseColors.warningBg,
-                  foreground: PlantPulseColors.warning,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: PlantPulseColors.mint,
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Text(
+                    '${_diagnoses.length} '
+                    '${_diagnoses.length == 1 ? 'scan' : 'scans'}',
+                    style: const TextStyle(
+                      color: PlantPulseColors.green,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            const _InfoCard(
-              title: 'Current status',
-              value: 'Possible Early Blight',
-              icon: Icons.health_and_safety_outlined,
+            const SizedBox(height: 20),
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.calendar_today_outlined,
+                  color: PlantPulseColors.green,
+                ),
+                title: const Text('Added to your garden'),
+                subtitle: Text(_formatDate(plant.createdAt)),
+              ),
             ),
             const SizedBox(height: 10),
-            const _InfoCard(
-              title: 'Active care plan',
-              value: '3 steps remaining',
-              icon: Icons.assignment_turned_in_outlined,
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.health_and_safety_outlined,
+                  color: PlantPulseColors.green,
+                ),
+                title: const Text('Latest diagnosis'),
+                subtitle: Text(
+                  latest == null
+                      ? 'No saved diagnosis yet'
+                      : '${latest.result} · '
+                          '${(latest.confidence * 100).round()}% confidence',
+                ),
+              ),
             ),
-            const SizedBox(height: 22),
-            const Text(
-              'Scan timeline',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 10),
-            const _Timeline(
-              date: 'Today',
-              title: 'Early Blight',
-              detail: '92% confidence',
-              danger: true,
-            ),
-            const _Timeline(
-              date: 'Sep 30',
-              title: 'Healthy',
-              detail: '96% confidence',
-            ),
-            const _Timeline(
-              date: 'Sep 25',
-              title: 'Healthy',
-              detail: '94% confidence',
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed:
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ScanScreen()),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Diagnosis history',
+                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
                   ),
+                ),
+                IconButton(
+                  tooltip: 'Refresh history',
+                  onPressed: () {
+                    setState(() => _isLoading = true);
+                    _loadDiagnoses();
+                  },
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_error != null)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.error_outline_rounded),
+                  title: Text(_error!),
+                  trailing: IconButton(
+                    onPressed: () {
+                      setState(() => _isLoading = true);
+                      _loadDiagnoses();
+                    },
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ),
+              )
+            else if (_diagnoses.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.history_rounded,
+                        size: 38,
+                        color: PlantPulseColors.green,
+                      ),
+                      SizedBox(height: 10),
+                      Text(
+                        'No diagnosis history yet',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Scan this plant to start building its health history.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: PlantPulseColors.muted,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ..._diagnoses.map(
+                (diagnosis) => Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: ListTile(
+                    leading: Icon(
+                      diagnosis.isHealthy
+                          ? Icons.check_circle_outline_rounded
+                          : Icons.warning_amber_rounded,
+                      color:
+                          diagnosis.isHealthy
+                              ? PlantPulseColors.green
+                              : PlantPulseColors.warning,
+                    ),
+                    title: Text(
+                      diagnosis.result,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: Text(
+                      '${_formatDate(diagnosis.createdAt)} · '
+                      '${(diagnosis.confidence * 100).round()}% confidence',
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: _scanThisPlant,
               icon: const Icon(Icons.center_focus_strong_rounded),
-              label: const Text('Scan Again'),
+              label: const Text('Scan This Plant'),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-
-  const _InfoCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: Icon(icon, color: PlantPulseColors.green),
-        title: Text(
-          title,
-          style: const TextStyle(color: PlantPulseColors.muted, fontSize: 11),
-        ),
-        subtitle: Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-      ),
-    );
-  }
-}
-
-class _Timeline extends StatelessWidget {
-  final String date;
-  final String title;
-  final String detail;
-  final bool danger;
-
-  const _Timeline({
-    required this.date,
-    required this.title,
-    required this.detail,
-    this.danger = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        children: [
-          SizedBox(
-            width: 56,
-            child: Text(
-              date,
-              style: const TextStyle(
-                color: PlantPulseColors.muted,
-                fontSize: 10,
-              ),
-            ),
-          ),
-          Column(
-            children: [
-              Container(
-                width: 11,
-                height: 11,
-                decoration: BoxDecoration(
-                  color:
-                      danger ? PlantPulseColors.danger : PlantPulseColors.green,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              Expanded(
-                child: Container(width: 2, color: PlantPulseColors.line),
-              ),
-            ],
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Card(
-                child: ListTile(
-                  title: Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  subtitle: Text(detail),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
