@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -5,14 +7,21 @@ import '../../app/app.dart';
 import '../../app/app_theme.dart';
 import '../../core/models/plant.dart';
 import '../../core/models/plant_diagnosis.dart';
-import '../../shared/widgets/plantpulse_scaffold.dart';
+import '../../core/network/plantpulse_api.dart';
 import '../expert/expert_screen.dart';
 import '../treatment/treatment_screen.dart';
 
 class DiagnosisScreen extends StatefulWidget {
-  const DiagnosisScreen({super.key, this.plant});
+  const DiagnosisScreen({
+    super.key,
+    required this.prediction,
+    required this.imageFile,
+    this.plant,
+  });
 
   final Plant? plant;
+  final PlantPulsePrediction prediction;
+  final File imageFile;
 
   @override
   State<DiagnosisScreen> createState() => _DiagnosisScreenState();
@@ -24,6 +33,11 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
   bool _saveAttempted = false;
 
   String get _scope => FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+
+  double get _confidence =>
+      widget.prediction.confidence.clamp(0.0, 1.0).toDouble();
+
+  bool get _isHealthy => widget.prediction.predictedClass == 'Tomato___healthy';
 
   @override
   void initState() {
@@ -43,8 +57,10 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
       return;
     }
 
-    _saving = true;
-    _saveAttempted = true;
+    setState(() {
+      _saving = true;
+      _saveAttempted = true;
+    });
 
     try {
       final diagnosis = PlantDiagnosis(
@@ -52,13 +68,9 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
         plantId: plant.id,
         plantName: plant.name,
         species: plant.species,
-        result: 'Early Blight',
-        confidence: 0.92,
-        symptoms: const [
-          'Circular brown lesions',
-          'Yellowing around affected areas',
-          'Leaf deterioration',
-        ],
+        result: widget.prediction.displayName,
+        confidence: _confidence,
+        symptoms: const [],
         createdAt: DateTime.now(),
       );
 
@@ -73,24 +85,33 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Diagnosis saved for ${plant.name}.')),
+        SnackBar(content: Text('Prediction saved for ${plant.name}.')),
       );
     } catch (_) {
       if (!mounted) return;
 
+      setState(() {
+        _saveAttempted = false;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not save diagnosis. Please try Save again.'),
+          content: Text('Could not save prediction. Please try Save again.'),
         ),
       );
     } finally {
-      _saving = false;
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final plant = widget.plant;
+    final confidencePercent = (_confidence * 100).round();
 
     return Scaffold(
       appBar: AppBar(
@@ -101,11 +122,11 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
         title: const Text('Diagnosis'),
         actions: [
           IconButton(
-            onPressed: _saving ? null : _saveDiagnosis,
+            onPressed: _saving || _saved ? null : _saveDiagnosis,
             icon: Icon(
               _saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
             ),
-            tooltip: _saved ? 'Saved' : 'Save diagnosis',
+            tooltip: _saved ? 'Saved' : 'Save prediction',
           ),
         ],
       ),
@@ -114,45 +135,35 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              height: 230,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(26),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFE8F4DF), Color(0xFFBCDCA9)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: const Center(
-                child: Icon(
-                  Icons.eco_rounded,
-                  size: 100,
-                  color: PlantPulseColors.green,
-                ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(26),
+              child: Image.file(
+                widget.imageFile,
+                width: double.infinity,
+                height: 230,
+                fit: BoxFit.cover,
+                errorBuilder:
+                    (_, __, ___) => Container(
+                      height: 230,
+                      width: double.infinity,
+                      color: PlantPulseColors.mint,
+                      child: const Icon(
+                        Icons.eco_rounded,
+                        size: 80,
+                        color: PlantPulseColors.green,
+                      ),
+                    ),
               ),
             ),
             const SizedBox(height: 18),
-            const Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Early Blight',
-                    style: TextStyle(fontSize: 29, fontWeight: FontWeight.w900),
-                  ),
-                ),
-                StatusPill(
-                  text: '92% confidence',
-                  background: PlantPulseColors.successBg,
-                  foreground: PlantPulseColors.green,
-                ),
-              ],
+            Text(
+              widget.prediction.displayName,
+              style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
             Text(
               plant == null
-                  ? 'Demo result • No plant selected'
+                  ? 'AI model prediction'
                   : '${plant.name} • ${plant.species}',
               style: const TextStyle(
                 color: PlantPulseColors.muted,
@@ -160,13 +171,13 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
               ),
             ),
             if (plant != null) ...[
-              const SizedBox(height: 5),
+              const SizedBox(height: 6),
               Text(
                 _saved
-                    ? 'Diagnosis saved to this plant’s history'
+                    ? 'Prediction saved to this plant’s history'
                     : _saving
-                    ? 'Saving diagnosis...'
-                    : 'Diagnosis will be saved to this plant’s history',
+                    ? 'Saving prediction...'
+                    : 'Prediction will be saved to this plant’s history',
                 style: TextStyle(
                   color:
                       _saved ? PlantPulseColors.green : PlantPulseColors.muted,
@@ -176,16 +187,71 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
               ),
             ],
             const SizedBox(height: 20),
-            const _ConfidenceCard(),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 66,
+                      height: 66,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            value: _confidence,
+                            strokeWidth: 7,
+                            color: PlantPulseColors.green,
+                            backgroundColor: PlantPulseColors.mint,
+                          ),
+                          Text(
+                            '$confidencePercent%',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Model score',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            'Model: ${widget.prediction.model}',
+                            style: const TextStyle(
+                              color: PlantPulseColors.muted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 18),
             const Text(
-              'Visible symptoms',
+              'Prediction details',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
             ),
-            const SizedBox(height: 10),
-            const _Symptom(text: 'Circular brown lesions'),
-            const _Symptom(text: 'Yellowing around affected areas'),
-            const _Symptom(text: 'Leaf deterioration'),
+            const SizedBox(height: 8),
+            Text(
+              _isHealthy
+                  ? 'The model classified this image as a healthy tomato leaf.'
+                  : 'The model classified this image as '
+                      '${widget.prediction.displayName}. '
+                      'Use this result as an initial indication, not a confirmed diagnosis.',
+              style: const TextStyle(height: 1.5),
+            ),
             const SizedBox(height: 18),
             Container(
               padding: const EdgeInsets.all(12),
@@ -193,43 +259,48 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
                 color: PlantPulseColors.warningBg,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Row(
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.info_outline_rounded,
                     size: 20,
                     color: PlantPulseColors.warning,
                   ),
-                  SizedBox(width: 9),
+                  const SizedBox(width: 9),
                   Expanded(
                     child: Text(
-                      'Demo diagnosis: the disease and confidence shown '
-                      'are sample values, not predictions from a trained '
-                      'plant-detection model.',
-                      style: TextStyle(fontSize: 12, height: 1.4),
+                      '${widget.prediction.notice} '
+                      'The model score is not a calibrated probability of '
+                      'being correct. This model has not been validated here '
+                      'on field images from Pakistan.',
+                      style: const TextStyle(fontSize: 12, height: 1.5),
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 18),
-            FilledButton(
-              onPressed:
-                  () => Navigator.push(
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () {
+                  Navigator.push(
                     context,
                     MaterialPageRoute<void>(
                       builder: (_) => const TreatmentScreen(),
                     ),
-                  ),
-              child: const Text('View Treatment Plan'),
+                  );
+                },
+                child: const Text('View Treatment Plan'),
+              ),
             ),
             const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _saving ? null : _saveDiagnosis,
+                    onPressed: _saving || _saved ? null : _saveDiagnosis,
                     icon: Icon(
                       _saved
                           ? Icons.bookmark_rounded
@@ -247,13 +318,14 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed:
-                        () => Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const ExpertScreen(),
-                          ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => const ExpertScreen(),
                         ),
+                      );
+                    },
                     icon: const Icon(Icons.support_agent_rounded),
                     label: const Text('Expert'),
                   ),
@@ -262,88 +334,6 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ConfidenceCard extends StatelessWidget {
-  const _ConfidenceCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 62,
-              height: 62,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    value: .92,
-                    strokeWidth: 7,
-                    color: PlantPulseColors.green,
-                    backgroundColor: PlantPulseColors.mint,
-                  ),
-                  const Text(
-                    '92',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 14),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Demo confidence',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'The displayed percentage is a sample value. '
-                    'Real confidence requires an actual model prediction.',
-                    style: TextStyle(
-                      color: PlantPulseColors.muted,
-                      fontSize: 11,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Symptom extends StatelessWidget {
-  const _Symptom({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.check_circle_rounded,
-            color: PlantPulseColors.green,
-            size: 19,
-          ),
-          const SizedBox(width: 9),
-          Expanded(child: Text(text)),
-        ],
       ),
     );
   }

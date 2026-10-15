@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../app/app_theme.dart';
 import '../../shared/widgets/plantpulse_scaffold.dart';
-import '../diagnosis/diagnosis_screen.dart';
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
@@ -15,68 +15,51 @@ class HistoryScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            PageHeader(
+            const PageHeader(
               title: 'Scan History',
               subtitle: 'Your recent and earlier inspections',
-              trailing: IconButton.filledTonal(
-                onPressed: () {},
-                icon: const Icon(Icons.ios_share_rounded),
-              ),
             ),
-            const SizedBox(height: 18),
-            const Row(
-              children: [
-                StatusPill(
-                  text: 'All',
-                  background: PlantPulseColors.mint,
-                  foreground: PlantPulseColors.green,
-                ),
-                SizedBox(width: 8),
-                StatusPill(
-                  text: 'Healthy',
-                  background: Colors.white,
-                  foreground: PlantPulseColors.muted,
-                ),
-                SizedBox(width: 8),
-                StatusPill(
-                  text: 'Disease',
-                  background: Colors.white,
-                  foreground: PlantPulseColors.muted,
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 24),
             const Text('Today', style: TextStyle(fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
-            _HistoryCard(
+            const _HistoryCard(
               plant: 'Tomato Roma',
               result: 'Early Blight',
               confidence: '92%',
               danger: true,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const DiagnosisScreen()),
-              ),
             ),
             const SizedBox(height: 10),
-            const Text('Earlier', style: TextStyle(fontWeight: FontWeight.w900)),
-            const SizedBox(height: 8),
             const _HistoryCard(
-              plant: 'Potato',
+              plant: 'Garden Tomato',
               result: 'Healthy',
               confidence: '96%',
+              danger: false,
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 22),
+            const Text(
+              'Earlier',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
             const _HistoryCard(
-              plant: 'Green Pepper',
-              result: 'Healthy',
-              confidence: '94%',
+              plant: 'Tomato Plant',
+              result: 'Late Blight',
+              confidence: '89%',
+              danger: true,
             ),
-            const SizedBox(height: 18),
-            OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.file_download_outlined),
-              label: const Text('Export inspection report'),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: PlantPulseColors.cream,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text(
+                'These are sample history entries. Live scan history '
+                'will appear when saved diagnosis records are connected.',
+                style: TextStyle(height: 1.5),
+              ),
             ),
           ],
         ),
@@ -90,28 +73,46 @@ class _HistoryCard extends StatelessWidget {
   final String result;
   final String confidence;
   final bool danger;
-  final VoidCallback? onTap;
 
   const _HistoryCard({
     required this.plant,
     required this.result,
     required this.confidence,
-    this.danger = false,
-    this.onTap,
+    required this.danger,
   });
 
   @override
   Widget build(BuildContext context) {
+    final resultColor =
+        danger ? PlantPulseColors.danger : PlantPulseColors.green;
+
     return Card(
       child: ListTile(
-        onTap: onTap,
-        leading: const PlantIcon(),
-        title: Text(plant, style: const TextStyle(fontWeight: FontWeight.w900)),
-        subtitle: Text(result),
-        trailing: StatusPill(
-          text: confidence,
-          background: danger ? PlantPulseColors.dangerBg : PlantPulseColors.successBg,
-          foreground: danger ? PlantPulseColors.danger : PlantPulseColors.green,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: CircleAvatar(
+          backgroundColor:
+              danger ? PlantPulseColors.dangerBg : PlantPulseColors.successBg,
+          child: Icon(
+            danger ? Icons.warning_amber_rounded : Icons.eco_rounded,
+            color: resultColor,
+          ),
+        ),
+        title: Text(plant, style: const TextStyle(fontWeight: FontWeight.w800)),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 5),
+          child: Text(result),
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              confidence,
+              style: TextStyle(fontWeight: FontWeight.w900, color: resultColor),
+            ),
+            const SizedBox(height: 4),
+            const Text('Model score', style: TextStyle(fontSize: 10)),
+          ],
         ),
       ),
     );

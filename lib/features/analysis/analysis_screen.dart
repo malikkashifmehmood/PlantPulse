@@ -1,73 +1,86 @@
-import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 import '../../app/app_theme.dart';
 import '../../core/models/plant.dart';
+import '../../core/network/plantpulse_api.dart';
 import '../diagnosis/diagnosis_screen.dart';
-import '../scan/low_confidence_screen.dart';
 
 class AnalysisScreen extends StatefulWidget {
-  const AnalysisScreen({super.key, this.plant});
+  const AnalysisScreen({super.key, required this.imageFile, this.plant});
 
   final Plant? plant;
+  final File imageFile;
 
   @override
   State<AnalysisScreen> createState() => _AnalysisScreenState();
 }
 
 class _AnalysisScreenState extends State<AnalysisScreen> {
-  double progress = 0.0;
-  Timer? timer;
+  final PlantPulseApi _api = PlantPulseApi();
+
+  bool _loading = true;
+  String? _error;
+  PlantPulsePrediction? _prediction;
+  bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
-
-    timer = Timer.periodic(const Duration(milliseconds: 180), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
-
-      setState(() {
-        progress = (progress + .035).clamp(0.0, 1.0);
-      });
-
-      if (progress >= 1.0) {
-        t.cancel();
-
-        Future.delayed(const Duration(milliseconds: 350), () {
-          if (!mounted) return;
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute<void>(
-              builder: (_) => DiagnosisScreen(plant: widget.plant),
-            ),
-          );
-        });
-      }
-    });
+    _runPrediction();
   }
 
-  @override
-  void dispose() {
-    timer?.cancel();
-    super.dispose();
+  Future<void> _runPrediction() async {
+    if (!mounted) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final prediction = await _api.predict(widget.imageFile);
+
+      if (!mounted) return;
+
+      setState(() {
+        _prediction = prediction;
+        _loading = false;
+      });
+
+      if (!_navigated) {
+        _navigated = true;
+
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+
+        if (!mounted) return;
+
+        await Navigator.pushReplacement(
+          context,
+          MaterialPageRoute<void>(
+            builder:
+                (_) => DiagnosisScreen(
+                  plant: widget.plant,
+                  prediction: prediction,
+                  imageFile: widget.imageFile,
+                ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _error = error.toString();
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final percent = (progress * 100).round();
-
-    final steps = [
-      ('Image quality', progress > .12),
-      ('Leaf segmentation', progress > .30),
-      ('Pigment analysis', progress > .48),
-      ('Vein analysis', progress > .66),
-      ('Pathology check', progress > .84),
-    ];
+    final percent = _loading ? null : 1.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -82,102 +95,102 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         child: Column(
           children: [
             const Spacer(),
-            Container(
-              width: 150,
-              height: 150,
-              decoration: BoxDecoration(
-                color: PlantPulseColors.mint,
-                shape: BoxShape.circle,
-                border: Border.all(color: PlantPulseColors.line, width: 8),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 8,
-                    color: PlantPulseColors.green,
-                    backgroundColor: Colors.white,
-                  ),
-                  const Icon(
-                    Icons.eco_rounded,
-                    size: 48,
-                    color: PlantPulseColors.green,
-                  ),
-                ],
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.file(
+                widget.imageFile,
+                width: 170,
+                height: 170,
+                fit: BoxFit.cover,
+                errorBuilder:
+                    (_, __, ___) => const SizedBox(
+                      width: 170,
+                      height: 170,
+                      child: Icon(Icons.broken_image_outlined, size: 64),
+                    ),
               ),
             ),
-            const SizedBox(height: 28),
-            const Text(
-              'Analyzing your leaf',
-              style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Running several image checks before showing a result.',
+            const SizedBox(height: 24),
+            Text(
+              _error != null
+                  ? 'Analysis could not finish'
+                  : _loading
+                  ? 'Analyzing your leaf'
+                  : 'Analysis complete',
               textAlign: TextAlign.center,
-              style: TextStyle(color: PlantPulseColors.muted, height: 1.45),
-            ),
-            const SizedBox(height: 22),
-            LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              borderRadius: BorderRadius.circular(100),
+              style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
             Text(
-              '$percent%',
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 24),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    for (final step in steps)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 7),
-                        child: Row(
-                          children: [
-                            Icon(
-                              step.$2
-                                  ? Icons.check_circle_rounded
-                                  : Icons.radio_button_unchecked_rounded,
-                              size: 20,
-                              color:
-                                  step.$2
-                                      ? PlantPulseColors.green
-                                      : PlantPulseColors.line,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                step.$1,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
+              _error != null
+                  ? 'Check your connection to the local prediction server.'
+                  : _loading
+                  ? 'Sending the image to your trained CNN model.'
+                  : 'Prediction received from the model.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: PlantPulseColors.muted,
+                height: 1.45,
               ),
             ),
-            const Spacer(),
-            TextButton(
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => const LowConfidenceScreen(),
-                  ),
-                );
-              },
-              child: const Text('Preview low-confidence state'),
-            ),
+            const SizedBox(height: 22),
+            if (_loading)
+              const CircularProgressIndicator()
+            else if (_error != null)
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.red,
+                size: 48,
+              )
+            else
+              const Icon(
+                Icons.check_circle_rounded,
+                color: PlantPulseColors.green,
+                size: 48,
+              ),
+            const SizedBox(height: 22),
+            if (_loading)
+              LinearProgressIndicator(
+                value: percent,
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(100),
+              ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+              const Spacer(),
+              FilledButton.icon(
+                onPressed: _runPrediction,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Try again'),
+              ),
+            ] else if (_loading) ...[
+              const Spacer(),
+              const Text(
+                'Keep the app open while the image is analyzed.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: PlantPulseColors.muted, fontSize: 12),
+              ),
+            ] else ...[
+              Text(
+                _prediction?.displayName ?? '',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+            ],
+            if (_error != null || !_loading)
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Back to scan'),
+              ),
           ],
         ),
       ),

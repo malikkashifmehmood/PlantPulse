@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../app/app.dart';
 import '../../core/models/plant.dart';
@@ -16,8 +19,8 @@ class ScanScreen extends StatefulWidget {
 }
 
 class _ScanScreenState extends State<ScanScreen> {
-  bool flash = false;
   bool _openingAnalysis = false;
+  final ImagePicker _imagePicker = ImagePicker();
 
   String get _scope => FirebaseAuth.instance.currentUser?.uid ?? 'guest';
 
@@ -64,9 +67,7 @@ class _ScanScreenState extends State<ScanScreen> {
                         ),
                         title: Text(plant.name),
                         subtitle: Text(plant.species),
-                        onTap: () {
-                          Navigator.pop(dialogContext, plant);
-                        },
+                        onTap: () => Navigator.pop(dialogContext, plant),
                       );
                     },
                   ),
@@ -83,10 +84,36 @@ class _ScanScreenState extends State<ScanScreen> {
         if (selectedPlant == null || !mounted) return;
       }
 
-      Navigator.push(
+      final pickedImage = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 95,
+        maxWidth: 2048,
+        maxHeight: 2048,
+      );
+
+      if (!mounted || pickedImage == null) return;
+
+      final imageFile = File(pickedImage.path);
+      final imageSize = await imageFile.length();
+
+      if (imageSize == 0 || imageSize > 8 * 1024 * 1024) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Choose a valid image smaller than 8 MB.'),
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+
+      await Navigator.push(
         context,
         MaterialPageRoute<void>(
-          builder: (_) => AnalysisScreen(plant: selectedPlant!),
+          builder:
+              (_) => AnalysisScreen(plant: selectedPlant, imageFile: imageFile),
         ),
       );
     } catch (_) {
@@ -94,7 +121,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Unable to start the scan. Please try again.'),
+          content: Text('Unable to select the image. Please try again.'),
         ),
       );
     } finally {
@@ -141,12 +168,9 @@ class _ScanScreenState extends State<ScanScreen> {
                             ),
                           ),
                         ),
-                        _CircleButton(
-                          icon:
-                              flash
-                                  ? Icons.flash_on_rounded
-                                  : Icons.flash_off_rounded,
-                          onTap: () => setState(() => flash = !flash),
+                        const Icon(
+                          Icons.photo_library_outlined,
+                          color: Colors.white,
                         ),
                       ],
                     ),
@@ -173,7 +197,7 @@ class _ScanScreenState extends State<ScanScreen> {
                           right: 0,
                           child: Center(
                             child: Text(
-                              'PLACE ONE LEAF INSIDE',
+                              'SELECT A LEAF IMAGE',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
@@ -192,7 +216,7 @@ class _ScanScreenState extends State<ScanScreen> {
                     child: Column(
                       children: [
                         const Text(
-                          'Good lighting • Keep leaf steady • Avoid glare',
+                          'Good lighting • Keep leaf clear • Avoid glare',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white70, fontSize: 11),
                         ),
@@ -230,8 +254,20 @@ class _ScanScreenState extends State<ScanScreen> {
                                           strokeWidth: 3,
                                         ),
                                       )
-                                      : null,
+                                      : const Icon(
+                                        Icons.photo_library_rounded,
+                                        color: Color(0xFF36764A),
+                                        size: 30,
+                                      ),
                             ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Choose from gallery',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
