@@ -108,6 +108,27 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
     }
   }
 
+  void _openTreatmentPlan() {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder:
+            (_) => TreatmentScreen(
+              prediction: widget.prediction,
+              plantName: widget.plant?.name,
+              species: widget.plant?.species,
+            ),
+      ),
+    );
+  }
+
+  void _openExpert() {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => const ExpertScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final plant = widget.plant;
@@ -249,7 +270,8 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
                   ? 'The model classified this image as a healthy tomato leaf.'
                   : 'The model classified this image as '
                       '${widget.prediction.displayName}. '
-                      'Use this result as an initial indication, not a confirmed diagnosis.',
+                      'Use this result as an initial indication, '
+                      'not a confirmed diagnosis.',
               style: const TextStyle(height: 1.5),
             ),
             const SizedBox(height: 18),
@@ -271,9 +293,9 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
                   Expanded(
                     child: Text(
                       '${widget.prediction.notice} '
-                      'The model score is not a calibrated probability of '
-                      'being correct. This model has not been validated here '
-                      'on field images from Pakistan.',
+                      'The model score is not a calibrated probability '
+                      'of being correct. This model has not been validated '
+                      'here on field images from Pakistan.',
                       style: const TextStyle(fontSize: 12, height: 1.5),
                     ),
                   ),
@@ -284,14 +306,7 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => const TreatmentScreen(),
-                    ),
-                  );
-                },
+                onPressed: _openTreatmentPlan,
                 child: const Text('View Treatment Plan'),
               ),
             ),
@@ -318,14 +333,7 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => const ExpertScreen(),
-                        ),
-                      );
-                    },
+                    onPressed: _openExpert,
                     icon: const Icon(Icons.support_agent_rounded),
                     label: const Text('Expert'),
                   ),
