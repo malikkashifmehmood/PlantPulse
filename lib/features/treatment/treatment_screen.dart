@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app.dart';
 import '../../app/app_theme.dart';
 import '../../core/network/plantpulse_api.dart';
+import 'models/treatment_progress.dart';
 
 class TreatmentScreen extends StatefulWidget {
   const TreatmentScreen({
@@ -9,11 +11,15 @@ class TreatmentScreen extends StatefulWidget {
     this.prediction,
     this.plantName,
     this.species,
+    this.plantId,
+    this.userScope,
   });
 
   final PlantPulsePrediction? prediction;
   final String? plantName;
   final String? species;
+  final String? plantId;
+  final String? userScope;
 
   @override
   State<TreatmentScreen> createState() => _TreatmentScreenState();
@@ -46,6 +52,89 @@ class _TreatmentPlan {
 class _TreatmentScreenState extends State<TreatmentScreen> {
   final Set<int> _completed = <int>{};
   bool _planStarted = false;
+
+  String get _scope {
+    final suppliedScope = widget.userScope?.trim();
+
+    return suppliedScope == null || suppliedScope.isEmpty
+        ? 'guest'
+        : suppliedScope;
+  }
+
+  String get _contextId =>
+      '${widget.plantId!.trim()}:${widget.prediction?.predictedClass ?? 'general'}';
+
+  bool get _canPersist =>
+      widget.plantId != null && widget.plantId!.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadProgress();
+      }
+    });
+  }
+
+  Future<void> _loadProgress() async {
+    if (!_canPersist) return;
+
+    try {
+      final repository = AppServicesScope.of(context).treatmentProgress;
+
+      // loadProgress returns TreatmentProgress directly, not a Future.
+      final saved = repository.loadProgress(
+        scope: _scope,
+        contextId: _contextId,
+      );
+
+      if (!mounted) return;
+
+      final stepCount = _plan.steps.length;
+
+      setState(() {
+        _planStarted = saved?.planStarted ?? false;
+
+        _completed
+          ..clear()
+          ..addAll(
+            (saved?.completedSteps ?? const <int>{}).where(
+              (index) => index >= 0 && index < stepCount,
+            ),
+          );
+      });
+    } catch (_) {
+      // Keep the treatment screen usable if local persistence fails.
+    }
+  }
+
+  Future<void> _persistProgress() async {
+    if (!_canPersist) return;
+
+    try {
+      final repository = AppServicesScope.of(context).treatmentProgress;
+
+      await repository.saveProgress(
+        scope: _scope,
+        contextId: _contextId,
+        progress: TreatmentProgress(
+          planStarted: _planStarted,
+          completedSteps: Set<int>.unmodifiable(_completed),
+          updatedAt: DateTime.now(),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not save treatment progress on this device.'),
+        ),
+      );
+    }
+  }
 
   static const _generalSteps = <_TreatmentStep>[
     _TreatmentStep(
@@ -376,10 +465,13 @@ class _TreatmentScreenState extends State<TreatmentScreen> {
         _completed.remove(index);
       }
     });
+
+    _persistProgress();
   }
 
   void _startPlan() {
     setState(() => _planStarted = true);
+    _persistProgress();
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -498,6 +590,13 @@ class _TreatmentScreenState extends State<TreatmentScreen> {
               'Plan progress',
               style: TextStyle(fontWeight: FontWeight.w900),
             ),
+            if (!_canPersist) ...[
+              const SizedBox(height: 5),
+              const Text(
+                'Select a plant to save progress between visits.',
+                style: TextStyle(color: PlantPulseColors.muted, fontSize: 11),
+              ),
+            ],
             const SizedBox(height: 8),
             LinearProgressIndicator(
               value: progress,

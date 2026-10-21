@@ -117,6 +117,8 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
               prediction: widget.prediction,
               plantName: widget.plant?.name,
               species: widget.plant?.species,
+              plantId: widget.plant?.id,
+              userScope: _scope,
             ),
       ),
     );
