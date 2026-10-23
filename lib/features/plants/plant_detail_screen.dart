@@ -5,6 +5,7 @@ import '../../app/app.dart';
 import '../../app/app_theme.dart';
 import '../../core/models/plant.dart';
 import '../../core/models/plant_diagnosis.dart';
+import '../diagnosis/saved_diagnosis_detail_screen.dart';
 import '../scan/scan_screen.dart';
 
 class PlantDetailScreen extends StatefulWidget {
@@ -55,6 +56,15 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _openDiagnosis(PlantDiagnosis diagnosis) {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => SavedDiagnosisDetailScreen(diagnosis: diagnosis),
+      ),
+    );
   }
 
   Future<void> _scanThisPlant() async {
@@ -193,6 +203,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
             const SizedBox(height: 10),
             Card(
               child: ListTile(
+                enabled: latest != null,
+                onTap: latest == null ? null : () => _openDiagnosis(latest),
                 leading: const Icon(
                   Icons.health_and_safety_outlined,
                   color: PlantPulseColors.green,
@@ -204,6 +216,10 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
                       : '${latest.result} · '
                           '${(latest.confidence * 100).round()}% confidence',
                 ),
+                trailing:
+                    latest == null
+                        ? null
+                        : const Icon(Icons.chevron_right_rounded),
               ),
             ),
             const SizedBox(height: 24),
@@ -279,6 +295,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
                 (diagnosis) => Card(
                   margin: const EdgeInsets.only(bottom: 10),
                   child: ListTile(
+                    onTap: () => _openDiagnosis(diagnosis),
                     leading: Icon(
                       diagnosis.isHealthy
                           ? Icons.check_circle_outline_rounded
@@ -296,6 +313,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
                       '${_formatDate(diagnosis.createdAt)} · '
                       '${(diagnosis.confidence * 100).round()}% confidence',
                     ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
                   ),
                 ),
               ),

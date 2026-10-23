@@ -79,7 +79,7 @@ class PlantPulseApiException implements Exception {
 
 class PlantPulseApi {
   // Android emulator address for the API running on your PC.
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  static const String baseUrl = 'http://10.252.64.83:8000';
 
   static const int maxImageBytes = 8 * 1024 * 1024;
 
