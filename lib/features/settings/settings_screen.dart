@@ -1,149 +1,145 @@
 import 'package:flutter/material.dart';
-import '../../app/app_theme.dart';
 
-class SettingsScreen extends StatefulWidget {
+import '../../app/app.dart';
+import '../../app/app_theme.dart';
+import '../../l10n/app_localizations.dart';
+
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  bool biometric = true;
-  bool alerts = true;
-  bool offline = true;
-  bool analytics = false;
-
-  @override
   Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    final localeScope = AppLocaleScope.of(context);
+    final currentLanguage = localeScope.locale.languageCode;
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: const Text('Settings'),
+        title: Text(strings.settings),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
         children: [
-          const _Heading('SECURITY'),
+          _Heading(strings.security),
           Card(
             child: Column(
               children: [
-                SwitchListTile(
-                  value: biometric,
-                  onChanged: (v) => setState(() => biometric = v),
-                  title: const Text('Biometric lock', style: TextStyle(fontWeight: FontWeight.w800)),
-                  subtitle: const Text('Protect the app on this device'),
-                  secondary: const Icon(Icons.fingerprint_rounded),
+                ListTile(
+                  leading: const Icon(Icons.fingerprint_rounded),
+                  title: Text(strings.biometricLock),
+                  subtitle: Text(strings.protectDevice),
                 ),
                 const Divider(height: 1),
-                const ListTile(
-                  leading: Icon(Icons.devices_other_rounded),
-                  title: Text('Active sessions'),
-                  trailing: Icon(Icons.chevron_right_rounded),
+                ListTile(
+                  leading: const Icon(Icons.devices_other_rounded),
+                  title: Text(strings.activeSessions),
                 ),
                 const Divider(height: 1),
-                const ListTile(
-                  leading: Icon(Icons.shield_outlined),
-                  title: Text('Sign-in security'),
-                  trailing: Icon(Icons.chevron_right_rounded),
+                ListTile(
+                  leading: const Icon(Icons.shield_outlined),
+                  title: Text(strings.signInSecurity),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 18),
-          const _Heading('PRIVACY'),
+          _Heading(strings.privacy),
           Card(
             child: Column(
               children: [
-                const ListTile(
-                  leading: Icon(Icons.camera_alt_outlined),
-                  title: Text('Camera permissions'),
-                  subtitle: Text('Only requested when scanning'),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_outlined),
+                  title: Text(strings.cameraPermissions),
+                  subtitle: Text(strings.cameraPermissionDescription),
                 ),
                 const Divider(height: 1),
-                SwitchListTile(
-                  value: analytics,
-                  onChanged: (v) => setState(() => analytics = v),
-                  title: const Text('Optional analytics'),
-                  subtitle: const Text('Off by default'),
-                  secondary: const Icon(Icons.insights_outlined),
+                ListTile(
+                  leading: const Icon(Icons.insights_outlined),
+                  title: Text(strings.optionalAnalytics),
+                  subtitle: Text(strings.analyticsDescription),
                 ),
                 const Divider(height: 1),
-                const ListTile(
-                  leading: Icon(Icons.file_download_outlined),
-                  title: Text('Export inspection logs'),
-                  trailing: Icon(Icons.chevron_right_rounded),
+                ListTile(
+                  leading: const Icon(Icons.file_download_outlined),
+                  title: Text(strings.exportInspectionLogs),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 18),
-          const _Heading('AI & OFFLINE'),
+          _Heading(strings.aiOffline),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.model_training_outlined),
+              title: Text(strings.modelInformation),
+              subtitle: Text(strings.diagnosticModelSubtitle),
+            ),
+          ),
+          const SizedBox(height: 18),
+          _Heading(strings.app),
           Card(
             child: Column(
               children: [
-                SwitchListTile(
-                  value: offline,
-                  onChanged: (v) => setState(() => offline = v),
-                  title: const Text('Offline model', style: TextStyle(fontWeight: FontWeight.w800)),
-                  subtitle: const Text('Use supported on-device diagnosis'),
-                  secondary: const Icon(Icons.phonelink_lock_rounded),
+                ListTile(
+                  leading: const Icon(Icons.notifications_none_rounded),
+                  title: Text(strings.notifications),
                 ),
                 const Divider(height: 1),
-                const ListTile(
-                  leading: Icon(Icons.model_training_outlined),
-                  title: Text('Model information'),
-                  subtitle: Text('PlantPulse Diagnostic Model'),
-                  trailing: Icon(Icons.chevron_right_rounded),
+                ListTile(
+                  leading: const Icon(Icons.language_rounded),
+                  title: Text(strings.language),
+                  trailing: DropdownButton<String>(
+                    value: currentLanguage,
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      DropdownMenuItem(
+                        value: 'en',
+                        child: Text(strings.english),
+                      ),
+                      DropdownMenuItem(value: 'ur', child: Text(strings.urdu)),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        localeScope.setLocale(Locale(value));
+                      }
+                    },
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.straighten_rounded),
+                  title: Text(strings.units),
+                  trailing: Text(strings.metric),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 18),
-          const _Heading('APP'),
-          Card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  value: alerts,
-                  onChanged: (v) => setState(() => alerts = v),
-                  title: const Text('Notifications'),
-                  secondary: const Icon(Icons.notifications_none_rounded),
-                ),
-                const Divider(height: 1),
-                const ListTile(
-                  leading: Icon(Icons.language_rounded),
-                  title: Text('Language'),
-                  trailing: Text('English'),
-                ),
-                const Divider(height: 1),
-                const ListTile(
-                  leading: Icon(Icons.straighten_rounded),
-                  title: Text('Units'),
-                  trailing: Text('Metric'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          const _Heading('DANGER ZONE'),
+          _Heading(strings.dangerZone),
           Card(
             color: PlantPulseColors.dangerBg,
             child: ListTile(
-              leading: const Icon(Icons.delete_forever_outlined, color: PlantPulseColors.danger),
-              title: const Text(
-                'Delete account',
-                style: TextStyle(
+              leading: const Icon(
+                Icons.delete_forever_outlined,
+                color: PlantPulseColors.danger,
+              ),
+              title: Text(
+                strings.deleteAccount,
+                style: const TextStyle(
                   color: PlantPulseColors.danger,
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              subtitle: const Text('Requires confirmation before any destructive action'),
-              trailing: const Icon(Icons.chevron_right_rounded, color: PlantPulseColors.danger),
-              onTap: () => _confirmDelete(context),
+              subtitle: Text(strings.deleteAccountDescription),
+              trailing: const Icon(
+                Icons.info_outline_rounded,
+                color: PlantPulseColors.danger,
+              ),
+              onTap: () => _showDeleteInformation(context, strings),
             ),
           ),
         ],
@@ -151,30 +147,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context) async {
+  Future<void> _showDeleteInformation(
+    BuildContext context,
+    AppLocalizations strings,
+  ) async {
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete account?'),
-        content: const Text(
-          'This is a UI placeholder. Production account deletion must require authenticated, server-side authorization and explicit confirmation.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Continue'),
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(strings.deleteAccountConfirmation),
+            content: Text(strings.deleteAccountPlaceholder),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(strings.cancel),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 }
 
 class _Heading extends StatelessWidget {
-  final String text;
-
   const _Heading(this.text);
+
+  final String text;
 
   @override
   Widget build(BuildContext context) {

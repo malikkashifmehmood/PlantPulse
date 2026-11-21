@@ -141,4 +141,78 @@ void main() {
       isNull,
     );
   });
+
+  test('deletes all treatment contexts for one plant only', () async {
+    await repository.saveProgress(
+      scope: 'guest',
+      contextId: 'plant-1:Tomato___Early_blight',
+      progress: createProgress(completedSteps: {0}),
+    );
+
+    await repository.saveProgress(
+      scope: 'guest',
+      contextId: 'plant-1:Tomato___Late_blight',
+      progress: createProgress(completedSteps: {1}),
+    );
+
+    await repository.saveProgress(
+      scope: 'guest',
+      contextId: 'plant-10:Tomato___Early_blight',
+      progress: createProgress(completedSteps: {2}),
+    );
+
+    await repository.saveProgress(
+      scope: 'another-user',
+      contextId: 'plant-1:Tomato___Early_blight',
+      progress: createProgress(completedSteps: {3}),
+    );
+
+    await repository.deleteForPlant(scope: 'guest', plantId: 'plant-1');
+
+    expect(
+      repository.loadProgress(
+        scope: 'guest',
+        contextId: 'plant-1:Tomato___Early_blight',
+      ),
+      isNull,
+    );
+
+    expect(
+      repository.loadProgress(
+        scope: 'guest',
+        contextId: 'plant-1:Tomato___Late_blight',
+      ),
+      isNull,
+    );
+
+    expect(
+      repository
+          .loadProgress(
+            scope: 'guest',
+            contextId: 'plant-10:Tomato___Early_blight',
+          )!
+          .completedSteps,
+      {2},
+    );
+
+    expect(
+      repository
+          .loadProgress(
+            scope: 'another-user',
+            contextId: 'plant-1:Tomato___Early_blight',
+          )!
+          .completedSteps,
+      {3},
+    );
+  });
+
+  test('deleting a plant with no treatment records succeeds', () async {
+    await expectLater(
+      repository.deleteForPlant(
+        scope: 'guest',
+        plantId: 'plant-without-progress',
+      ),
+      completes,
+    );
+  });
 }

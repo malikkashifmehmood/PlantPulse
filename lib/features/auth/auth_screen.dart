@@ -1,8 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/validation/credential_validator.dart';
-import '../../features/home/home_screen.dart';
+import '../../l10n/app_localizations.dart';
+import '../home/home_screen.dart';
 import 'create_account_screen.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -22,8 +24,13 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _obscurePassword = true;
   bool _isSigningIn = false;
   bool _isSendingReset = false;
+  bool _isContinuingAsGuest = false;
 
   FirebaseAuth get _auth => widget.auth ?? FirebaseAuth.instance;
+
+  bool get _isBusy => _isSigningIn || _isSendingReset || _isContinuingAsGuest;
+
+  AppLocalizations get _l10n => AppLocalizations.of(context);
 
   @override
   void dispose() {
@@ -32,11 +39,35 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
+  String? _localizedValidationMessage(String? message) {
+    if (message == null) return null;
+
+    final l10n = _l10n;
+
+    switch (message) {
+      case 'Email is required.':
+        return l10n.emailRequired;
+      case 'Email is too long.':
+        return l10n.emailTooLong;
+      case 'Enter a valid email address.':
+        return l10n.enterValidEmail;
+      case 'Password is required.':
+        return l10n.passwordRequired;
+      case 'Password must contain at least 8 characters.':
+        return l10n.passwordTooShort;
+      case 'Password is too long.':
+        return l10n.passwordTooLong;
+      default:
+        return message;
+    }
+  }
+
   Future<void> _submit() async {
-    if (_isSigningIn || !_formKey.currentState!.validate()) {
+    if (_isBusy || !_formKey.currentState!.validate()) {
       return;
     }
 
+    FocusScope.of(context).unfocus();
     setState(() => _isSigningIn = true);
 
     try {
@@ -47,6 +78,8 @@ class _AuthScreenState extends State<AuthScreen> {
 
       if (!mounted) return;
 
+      TextInput.finishAutofillContext(shouldSave: true);
+
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
         (route) => false,
@@ -54,37 +87,38 @@ class _AuthScreenState extends State<AuthScreen> {
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
 
-      String message;
+      final l10n = _l10n;
+      final String message;
 
       switch (error.code) {
         case 'invalid-credential':
         case 'wrong-password':
         case 'user-not-found':
-          message = 'Invalid email or password.';
+          message = l10n.invalidEmailOrPassword;
           break;
         case 'invalid-email':
-          message = 'Enter a valid email address.';
+          message = l10n.enterValidEmail;
           break;
         case 'user-disabled':
-          message = 'This account has been disabled. Contact support.';
+          message = l10n.accountDisabled;
           break;
         case 'too-many-requests':
-          message = 'Too many attempts. Please wait before trying again.';
+          message = l10n.tooManyAttempts;
           break;
         case 'network-request-failed':
-          message = 'Network error. Check your internet connection.';
+          message = l10n.networkError;
           break;
         case 'operation-not-allowed':
-          message = 'Email and password sign-in is not enabled.';
+          message = l10n.signInNotEnabled;
           break;
         default:
-          message = 'Unable to sign in. Please try again.';
+          message = l10n.unableToSignIn;
       }
 
       _showMessage(message);
     } catch (_) {
       if (!mounted) return;
-      _showMessage('Unable to sign in. Please try again.');
+      _showMessage(_l10n.unableToSignIn);
     } finally {
       if (mounted) {
         setState(() => _isSigningIn = false);
@@ -93,16 +127,17 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _sendPasswordReset() async {
-    if (_isSendingReset) return;
+    if (_isBusy) return;
 
     final email = _emailController.text.trim();
     final validationMessage = CredentialValidator.validateEmail(email);
 
     if (validationMessage != null) {
-      _showMessage(validationMessage);
+      _showMessage(_localizedValidationMessage(validationMessage)!);
       return;
     }
 
+    FocusScope.of(context).unfocus();
     setState(() => _isSendingReset = true);
 
     try {
@@ -110,22 +145,20 @@ class _AuthScreenState extends State<AuthScreen> {
 
       if (!mounted) return;
 
-      _showMessage(
-        'If an account exists for this email, a password reset email has been sent.',
-      );
+      _showMessage(_l10n.passwordResetSent);
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
 
       if (error.code == 'too-many-requests') {
-        _showMessage('Too many attempts. Please wait before trying again.');
+        _showMessage(_l10n.tooManyAttempts);
       } else if (error.code == 'network-request-failed') {
-        _showMessage('Network error. Check your internet connection.');
+        _showMessage(_l10n.networkError);
       } else {
-        _showMessage('Unable to process the request. Please try again.');
+        _showMessage(_l10n.unableToProcessRequest);
       }
     } catch (_) {
       if (!mounted) return;
-      _showMessage('Unable to process the request. Please try again.');
+      _showMessage(_l10n.unableToProcessRequest);
     } finally {
       if (mounted) {
         setState(() => _isSendingReset = false);
@@ -133,35 +166,37 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  void _continueAsGuest() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
-    );
+  Future<void> _continueAsGuest() async {
+    if (_isBusy) return;
+
+    setState(() => _isContinuingAsGuest = true);
+
+    try {
+      await _auth.signOut();
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage(_l10n.unableToSwitchGuest);
+    } finally {
+      if (mounted) {
+        setState(() => _isContinuingAsGuest = false);
+      }
+    }
   }
 
   void _openCreateAccount() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const CreateAccountScreen()),
-    );
-  }
+    if (_isBusy) return;
 
-  void _showUnavailable(String feature) {
-    showDialog<void>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Text('$feature unavailable'),
-            content: Text(
-              '$feature sign-in is not configured yet. '
-              'Please use email and password instead.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CreateAccountScreen(auth: widget.auth),
+      ),
     );
   }
 
@@ -175,6 +210,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final l10n = _l10n;
 
     return Scaffold(
       body: SafeArea(
@@ -183,168 +219,166 @@ class _AuthScreenState extends State<AuthScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Center(child: PlantMark()),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Welcome back',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: colors.onSurface,
+              child: AutofillGroup(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Center(child: PlantMark()),
+                      const SizedBox(height: 20),
+                      Text(
+                        l10n.welcomeBack,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: colors.onSurface,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Sign in to continue caring for your plants.',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colors.onSurfaceVariant,
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.signInToContinue,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 32),
-                    Text('Email', style: theme.textTheme.labelLarge),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      autofillHints: const [AutofillHints.email],
-                      validator:
-                          (value) =>
+                      const SizedBox(height: 32),
+
+                      Text(l10n.email, style: theme.textTheme.labelLarge),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        autofillHints: const [
+                          AutofillHints.username,
+                          AutofillHints.email,
+                        ],
+                        validator:
+                            (value) => _localizedValidationMessage(
                               CredentialValidator.validateEmail(value ?? ''),
-                      decoration: const InputDecoration(
-                        hintText: 'you@example.com',
-                        prefixIcon: Icon(Icons.email_outlined),
-                        border: OutlineInputBorder(),
+                            ),
+                        decoration: InputDecoration(
+                          hintText: l10n.emailHint,
+                          prefixIcon: const Icon(Icons.email_outlined),
+                          border: const OutlineInputBorder(),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text('Password', style: theme.textTheme.labelLarge),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      textInputAction: TextInputAction.done,
-                      autofillHints: const [AutofillHints.password],
-                      validator:
-                          (value) =>
+                      const SizedBox(height: 20),
+
+                      Text(l10n.password, style: theme.textTheme.labelLarge),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        textInputAction: TextInputAction.done,
+                        autofillHints: const [AutofillHints.password],
+                        validator:
+                            (value) => _localizedValidationMessage(
                               CredentialValidator.validatePassword(value ?? ''),
-                      onFieldSubmitted: (_) => _submit(),
-                      decoration: InputDecoration(
-                        hintText: 'Enter your password',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          tooltip:
+                            ),
+                        onFieldSubmitted: (_) => _submit(),
+                        decoration: InputDecoration(
+                          hintText: l10n.passwordHint,
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            tooltip:
+                                _obscurePassword
+                                    ? l10n.showPassword
+                                    : l10n.hidePassword,
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                            icon: Icon(
                               _obscurePassword
-                                  ? 'Show password'
-                                  : 'Hide password',
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: _isSendingReset ? null : _sendPasswordReset,
-                        child:
-                            _isSendingReset
-                                ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                                : const Text('Forgot password?'),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 52,
-                      child: FilledButton(
-                        onPressed: _isSigningIn ? null : _submit,
-                        child:
-                            _isSigningIn
-                                ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                                : const Text('Sign In'),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const _OrDivider(),
-                    const SizedBox(height: 20),
-                    OutlinedButton.icon(
-                      onPressed: () => _showUnavailable('Google'),
-                      icon: const Icon(Icons.g_mobiledata, size: 28),
-                      label: const Text('Continue with Google'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () => _showUnavailable('Apple'),
-                      icon: const Icon(Icons.apple, size: 24),
-                      label: const Text('Continue with Apple'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton.icon(
-                      onPressed: () => _showUnavailable('Biometric'),
-                      icon: const Icon(Icons.fingerprint),
-                      label: const Text('Use biometrics'),
-                    ),
-                    const SizedBox(height: 8),
-                    Center(
-                      child: TextButton(
-                        onPressed: _continueAsGuest,
-                        child: const Text('Continue as Guest'),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Flexible(child: Text('New here? ')),
-                        Flexible(
-                          child: TextButton(
-                            onPressed: _openCreateAccount,
-                            child: const Text('Create account'),
-                          ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _isBusy ? null : _sendPasswordReset,
+                          child:
+                              _isSendingReset
+                                  ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : Text(l10n.forgotPassword),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Authentication is handled securely by Firebase.',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+
+                      SizedBox(
+                        height: 52,
+                        child: FilledButton(
+                          onPressed: _isBusy ? null : _submit,
+                          child:
+                              _isSigningIn
+                                  ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : Text(l10n.signIn),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      Center(
+                        child: TextButton(
+                          onPressed: _isBusy ? null : _continueAsGuest,
+                          child:
+                              _isContinuingAsGuest
+                                  ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : Text(l10n.continueAsGuest),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Flexible(child: Text(l10n.newHere)),
+                          Flexible(
+                            child: TextButton(
+                              onPressed: _isBusy ? null : _openCreateAccount,
+                              child: Text(l10n.createAccount),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      Text(
+                        l10n.authenticationSecurityNote,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -374,26 +408,6 @@ class PlantMark extends StatelessWidget {
         size: 42,
         color: colors.onPrimaryContainer,
       ),
-    );
-  }
-}
-
-class _OrDivider extends StatelessWidget {
-  const _OrDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.outlineVariant;
-
-    return Row(
-      children: [
-        Expanded(child: Divider(color: color)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text('OR', style: Theme.of(context).textTheme.labelSmall),
-        ),
-        Expanded(child: Divider(color: color)),
-      ],
     );
   }
 }

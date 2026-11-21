@@ -1,3 +1,4 @@
+
 name: plantpulse
 description: PlantPulse crop monitoring and leaf disease diagnosis UI.
 publish_to: "none"
@@ -11,6 +12,9 @@ dependencies:
   firebase_core: ^4.15.0
   flutter:
     sdk: flutter
+  flutter_litert: 4.2.0
+  flutter_localizations:
+    sdk: flutter
   flutter_secure_storage: ^11.2.0
   http: ^1.6.0
   http_parser: ^4.1.2
@@ -22,6 +26,11 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^5.0.0
   firebase_auth_mocks: ^0.15.2
+  mock_exceptions: ^0.8.2
 
 flutter:
   uses-material-design: true
+  generate: true
+  assets:
+    - assets/models/plantpulse_finetuned_best.tflite
+    - assets/models/class_names.json

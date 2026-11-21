@@ -1,3 +1,4 @@
+
 import '../security/security_constants.dart';
 
 class CredentialValidator {
@@ -21,6 +22,7 @@ class CredentialValidator {
     return null;
   }
 
+  // Used for sign-in to preserve compatibility with existing accounts.
   static String? validatePassword(String value) {
     if (value.isEmpty) {
       return 'Password is required.';
@@ -33,6 +35,21 @@ class CredentialValidator {
 
     if (value.length > SecurityConstants.maxTextInputLength) {
       return 'Password is too long.';
+    }
+
+    return null;
+  }
+
+  // Used when creating a new account.
+  static String? validateRegistrationPassword(String value) {
+    final lengthError = validatePassword(value);
+
+    if (lengthError != null) {
+      return lengthError;
+    }
+
+    if (!RegExp(r'[A-Z]').hasMatch(value)) {
+      return 'Password must contain at least one uppercase letter (A–Z).';
     }
 
     return null;

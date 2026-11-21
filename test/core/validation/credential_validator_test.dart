@@ -1,3 +1,4 @@
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plantpulse/core/security/security_constants.dart';
 import 'package:plantpulse/core/validation/credential_validator.dart';
@@ -9,7 +10,10 @@ void main() {
     });
 
     test('accepts an email with surrounding whitespace', () {
-      expect(CredentialValidator.validateEmail('  user@example.com  '), isNull);
+      expect(
+        CredentialValidator.validateEmail('  user@example.com  '),
+        isNull,
+      );
     });
 
     test('rejects an empty email', () {
@@ -34,9 +38,13 @@ void main() {
     });
   });
 
-  group('CredentialValidator password', () {
+  group('CredentialValidator sign-in password', () {
     test('accepts a password with the minimum length', () {
       expect(CredentialValidator.validatePassword('12345678'), isNull);
+    });
+
+    test('does not require uppercase letters for existing accounts', () {
+      expect(CredentialValidator.validatePassword('password123'), isNull);
     });
 
     test('rejects a short password', () {
@@ -63,6 +71,55 @@ void main() {
       final password = 'a' * SecurityConstants.maxTextInputLength;
 
       expect(CredentialValidator.validatePassword(password), isNull);
+    });
+  });
+
+  group('CredentialValidator registration password', () {
+    test('accepts a password containing an uppercase letter', () {
+      expect(
+        CredentialValidator.validateRegistrationPassword('Garden2026A'),
+        isNull,
+      );
+    });
+
+    test('rejects a password without an uppercase letter', () {
+      expect(
+        CredentialValidator.validateRegistrationPassword('garden2026'),
+        'Password must contain at least one uppercase letter (A–Z).',
+      );
+    });
+
+    test('rejects an empty password', () {
+      expect(
+        CredentialValidator.validateRegistrationPassword(''),
+        'Password is required.',
+      );
+    });
+
+    test('rejects a password shorter than the minimum length', () {
+      expect(
+        CredentialValidator.validateRegistrationPassword('Garden1'),
+        'Password must contain at least 8 characters.',
+      );
+    });
+
+    test('rejects a password exceeding the maximum length', () {
+      final password =
+          '${'A'}${'a' * SecurityConstants.maxTextInputLength}';
+
+      expect(
+        CredentialValidator.validateRegistrationPassword(password),
+        'Password is too long.',
+      );
+    });
+
+    test('accepts a password at the maximum length with uppercase', () {
+      final password = 'A${'a' * (SecurityConstants.maxTextInputLength - 1)}';
+
+      expect(
+        CredentialValidator.validateRegistrationPassword(password),
+        isNull,
+      );
     });
   });
 }

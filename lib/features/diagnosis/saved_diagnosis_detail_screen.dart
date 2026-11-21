@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_theme.dart';
 import '../../core/models/plant_diagnosis.dart';
+import '../../l10n/app_localizations.dart';
 
 class SavedDiagnosisDetailScreen extends StatelessWidget {
   const SavedDiagnosisDetailScreen({super.key, required this.diagnosis});
@@ -17,11 +18,12 @@ class SavedDiagnosisDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final confidence = (diagnosis.confidence * 100).round();
     final healthy = diagnosis.isHealthy;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Diagnosis Details')),
+      appBar: AppBar(title: Text(l10n.savedDiagnosisDetailsTitle)),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -56,7 +58,8 @@ class SavedDiagnosisDetailScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '$confidence% model score',
+                  l10n.savedDiagnosisModelScore(confidence),
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -75,7 +78,7 @@ class SavedDiagnosisDetailScreen extends StatelessWidget {
                     Icons.local_florist_outlined,
                     color: PlantPulseColors.green,
                   ),
-                  title: const Text('Plant'),
+                  title: Text(l10n.savedDiagnosisPlant),
                   subtitle: Text(diagnosis.plantName),
                 ),
                 const Divider(height: 1),
@@ -84,7 +87,7 @@ class SavedDiagnosisDetailScreen extends StatelessWidget {
                     Icons.category_outlined,
                     color: PlantPulseColors.green,
                   ),
-                  title: const Text('Species'),
+                  title: Text(l10n.savedDiagnosisSpecies),
                   subtitle: Text(diagnosis.species),
                 ),
                 const Divider(height: 1),
@@ -93,16 +96,16 @@ class SavedDiagnosisDetailScreen extends StatelessWidget {
                     Icons.calendar_today_outlined,
                     color: PlantPulseColors.green,
                   ),
-                  title: const Text('Scan date'),
+                  title: Text(l10n.savedDiagnosisScanDate),
                   subtitle: Text(_formatDate(diagnosis.createdAt)),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 20),
-          const Text(
-            'Recorded symptoms',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          Text(
+            l10n.savedDiagnosisSymptoms,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
           Card(
@@ -110,9 +113,9 @@ class SavedDiagnosisDetailScreen extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child:
                   diagnosis.symptoms.isEmpty
-                      ? const Text(
-                        'No symptoms were recorded for this scan.',
-                        style: TextStyle(
+                      ? Text(
+                        l10n.savedDiagnosisNoSymptoms,
+                        style: const TextStyle(
                           color: PlantPulseColors.muted,
                           height: 1.5,
                         ),
@@ -150,21 +153,18 @@ class SavedDiagnosisDetailScreen extends StatelessWidget {
               color: PlantPulseColors.warningBg,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Row(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
+                const Icon(
                   Icons.info_outline_rounded,
                   color: PlantPulseColors.warning,
                 ),
-                SizedBox(width: 10),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'This is a saved AI model prediction, not a confirmed '
-                    'diagnosis. The model score is not a calibrated '
-                    'probability of being correct. Check the plant carefully '
-                    'and seek expert advice if symptoms persist.',
-                    style: TextStyle(height: 1.5, fontSize: 12),
+                    l10n.savedDiagnosisDisclaimer,
+                    style: const TextStyle(height: 1.5, fontSize: 12),
                   ),
                 ),
               ],

@@ -1,9 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import '../../app/app_theme.dart';
 import '../../core/security/security_constants.dart';
 import '../../core/validation/credential_validator.dart';
+import '../../l10n/app_localizations.dart';
 import '../home/home_screen.dart';
 import 'auth_screen.dart';
 
@@ -23,11 +24,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  bool _obscurePassword = true;
-  bool _obscureConfirmation = true;
   bool _isLoading = false;
+  bool _isContinuingAsGuest = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   FirebaseAuth get _auth => widget.auth ?? FirebaseAuth.instance;
+
+  AppLocalizations get _l10n => AppLocalizations.of(context);
 
   @override
   void dispose() {
@@ -39,60 +43,81 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   }
 
   String? _validateName(String? value) {
-    final name = (value ?? '').trim();
+    final name = value?.trim() ?? '';
 
     if (name.isEmpty) {
-      return 'Full name is required.';
-    }
-
-    if (name.length > SecurityConstants.maxTextInputLength) {
-      return 'Full name is too long.';
+      return _l10n.fullNameRequired;
     }
 
     if (name.length < 2) {
-      return 'Enter at least 2 characters.';
+      return _l10n.nameTooShort;
+    }
+
+    if (name.length > SecurityConstants.maxTextInputLength) {
+      return _l10n.nameTooLong;
     }
 
     return null;
   }
 
-  String? _validateConfirmation(String? value) {
+  String? _validateConfirmPassword(String? value) {
     if (value == null || value.isEmpty) {
-      return 'Please confirm your password.';
+      return _l10n.confirmPasswordRequired;
     }
 
     if (value != _passwordController.text) {
-      return 'Passwords do not match.';
+      return _l10n.passwordsDoNotMatch;
     }
 
     return null;
+  }
+
+  String? _localizedValidationMessage(String? message) {
+    if (message == null) return null;
+
+    switch (message) {
+      case 'Email is required.':
+        return _l10n.emailRequired;
+      case 'Email is too long.':
+        return _l10n.emailTooLong;
+      case 'Enter a valid email address.':
+        return _l10n.enterValidEmail;
+      case 'Password is required.':
+        return _l10n.passwordRequired;
+      case 'Password must contain at least 8 characters.':
+        return _l10n.passwordTooShort;
+      case 'Password is too long.':
+        return _l10n.passwordTooLong;
+      default:
+        return message;
+    }
   }
 
   String _registrationError(FirebaseAuthException error) {
     switch (error.code) {
       case 'email-already-in-use':
-        return 'An account with this email already exists.';
-      case 'weak-password':
-        return 'Choose a stronger password.';
+        return _l10n.emailAlreadyInUse;
       case 'invalid-email':
-        return 'Enter a valid email address.';
-      case 'network-request-failed':
-        return 'Network error. Check your connection and try again.';
-      case 'too-many-requests':
-        return 'Too many attempts. Please try again later.';
+        return _l10n.enterValidEmail;
+      case 'weak-password':
+        return _l10n.weakPassword;
       case 'operation-not-allowed':
-        return 'Email registration is currently unavailable.';
+        return _l10n.registrationNotEnabled;
+      case 'too-many-requests':
+        return _l10n.tooManyAttempts;
+      case 'network-request-failed':
+        return _l10n.networkError;
       default:
-        return 'Unable to create your account. Please try again.';
+        return _l10n.unableToCreateAccount;
     }
   }
 
   Future<void> _submit() async {
+    if (_isLoading || _isContinuingAsGuest) return;
+
     FocusScope.of(context).unfocus();
 
-    if (_isLoading || !_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
@@ -102,47 +127,35 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         password: _passwordController.text,
       );
 
-      final user = credential.user;
-
-      if (user == null) {
-        throw FirebaseAuthException(code: 'registration-failed');
-      }
-
       try {
-        await user.updateDisplayName(_nameController.text.trim());
-      } catch (_) {
-        // The account was created. A display-name update failure should not
-        // be reported as if registration itself failed.
+        await credential.user?.updateDisplayName(_nameController.text.trim());
+      } catch (error, stackTrace) {
+        debugPrint(
+          'PlantPulse: display-name update failed '
+          '(${error.runtimeType}).',
+        );
+        debugPrintStack(stackTrace: stackTrace);
       }
 
       if (!mounted) return;
 
+      TextInput.finishAutofillContext(shouldSave: true);
+
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
         (route) => false,
       );
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(_registrationError(error)),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-    } catch (_) {
+      debugPrint('PlantPulse registration failed: ${error.code}');
+      _showMessage(_registrationError(error));
+    } catch (error, stackTrace) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Unable to create your account. Please try again.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      debugPrint('PlantPulse registration failed (${error.runtimeType}).');
+      debugPrintStack(stackTrace: stackTrace);
+      _showMessage(_l10n.unableToCreateAccount);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -150,213 +163,252 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     }
   }
 
-  void _continueAsGuest() {
-    if (_isLoading) return;
+  Future<void> _continueAsGuest() async {
+    if (_isLoading || _isContinuingAsGuest) return;
 
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-      (route) => false,
+    setState(() => _isContinuingAsGuest = true);
+
+    try {
+      await _auth.signOut();
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage(_l10n.unableToSwitchGuest);
+    } finally {
+      if (mounted) {
+        setState(() => _isContinuingAsGuest = false);
+      }
+    }
+  }
+
+  void _openSignIn() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(builder: (_) => AuthScreen(auth: widget.auth)),
     );
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final isBusy = _isLoading || _isContinuingAsGuest;
+
     return Scaffold(
+      appBar: AppBar(),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                IconButton(
-                  onPressed:
-                      _isLoading
-                          ? null
-                          : () => Navigator.of(context).maybePop(),
-                  tooltip: 'Go back',
-                  icon: const Icon(Icons.arrow_back_rounded),
-                ),
-                const SizedBox(height: 12),
-                const PlantMark(),
-                const SizedBox(height: 26),
-                const Text(
-                  'Create account',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -1,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Start building a healthier garden with PlantPulse.',
-                  style: TextStyle(color: PlantPulseColors.muted, height: 1.5),
-                ),
-                const SizedBox(height: 26),
-                const _FieldLabel('Full name'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _nameController,
-                  enabled: !_isLoading,
-                  textCapitalization: TextCapitalization.words,
-                  textInputAction: TextInputAction.next,
-                  maxLength: SecurityConstants.maxTextInputLength,
-                  decoration: const InputDecoration(
-                    hintText: 'Your full name',
-                    prefixIcon: Icon(Icons.person_outline_rounded),
-                    counterText: '',
-                  ),
-                  validator: _validateName,
-                ),
-                const SizedBox(height: 16),
-                const _FieldLabel('Email'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _emailController,
-                  enabled: !_isLoading,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  maxLength: SecurityConstants.maxTextInputLength,
-                  decoration: const InputDecoration(
-                    hintText: 'you@example.com',
-                    prefixIcon: Icon(Icons.mail_outline_rounded),
-                    counterText: '',
-                  ),
-                  validator:
-                      (value) => CredentialValidator.validateEmail(value ?? ''),
-                ),
-                const SizedBox(height: 16),
-                const _FieldLabel('Password'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _passwordController,
-                  enabled: !_isLoading,
-                  obscureText: _obscurePassword,
-                  textInputAction: TextInputAction.next,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  maxLength: SecurityConstants.maxTextInputLength,
-                  decoration: InputDecoration(
-                    hintText: 'At least 8 characters',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded),
-                    counterText: '',
-                    suffixIcon: IconButton(
-                      onPressed:
-                          _isLoading
-                              ? null
-                              : () => setState(
-                                () => _obscurePassword = !_obscurePassword,
-                              ),
-                      tooltip:
-                          _obscurePassword ? 'Show password' : 'Hide password',
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: AutofillGroup(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Center(child: _PlantMark()),
+                      const SizedBox(height: 20),
+                      Text(
+                        _l10n.createAccount,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: colors.onSurface,
+                        ),
                       ),
-                    ),
-                  ),
-                  validator:
-                      (value) =>
-                          CredentialValidator.validatePassword(value ?? ''),
-                  onChanged: (_) {
-                    if (_confirmPasswordController.text.isNotEmpty) {
-                      _formKey.currentState?.validate();
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                const _FieldLabel('Confirm password'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _confirmPasswordController,
-                  enabled: !_isLoading,
-                  obscureText: _obscureConfirmation,
-                  textInputAction: TextInputAction.done,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  maxLength: SecurityConstants.maxTextInputLength,
-                  decoration: InputDecoration(
-                    hintText: 'Re-enter your password',
-                    prefixIcon: const Icon(Icons.verified_user_outlined),
-                    counterText: '',
-                    suffixIcon: IconButton(
-                      onPressed:
-                          _isLoading
-                              ? null
-                              : () => setState(
-                                () =>
-                                    _obscureConfirmation =
-                                        !_obscureConfirmation,
-                              ),
-                      tooltip:
-                          _obscureConfirmation
-                              ? 'Show password'
-                              : 'Hide password',
-                      icon: Icon(
-                        _obscureConfirmation
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+                      const SizedBox(height: 8),
+                      Text(
+                        _l10n.createAccountDescription,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ),
-                  validator: _validateConfirmation,
-                  onFieldSubmitted: (_) {
-                    if (!_isLoading) _submit();
-                  },
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _isLoading ? null : _submit,
-                    child:
-                        _isLoading
-                            ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : const Text('Create Account'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Center(
-                  child: TextButton(
-                    onPressed:
-                        _isLoading
-                            ? null
-                            : () {
-                              Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(
-                                  builder: (_) => const AuthScreen(),
-                                ),
-                              );
+                      const SizedBox(height: 28),
+
+                      _FieldLabel(_l10n.fullName),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _nameController,
+                        textCapitalization: TextCapitalization.words,
+                        textInputAction: TextInputAction.next,
+                        autofillHints: const [AutofillHints.name],
+                        validator: _validateName,
+                        decoration: InputDecoration(
+                          hintText: _l10n.fullNameHint,
+                          prefixIcon: const Icon(Icons.person_outline),
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      _FieldLabel(_l10n.email),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        autofillHints: const [AutofillHints.email],
+                        validator:
+                            (value) => _localizedValidationMessage(
+                              CredentialValidator.validateEmail(value ?? ''),
+                            ),
+                        decoration: InputDecoration(
+                          hintText: _l10n.emailHint,
+                          prefixIcon: const Icon(Icons.email_outlined),
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      _FieldLabel(_l10n.password),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        textInputAction: TextInputAction.next,
+                        autofillHints: const [AutofillHints.newPassword],
+                        validator:
+                            (value) => _localizedValidationMessage(
+                              CredentialValidator.validatePassword(value ?? ''),
+                            ),
+                        decoration: InputDecoration(
+                          hintText: _l10n.createPasswordHint,
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            tooltip:
+                                _obscurePassword
+                                    ? _l10n.showPassword
+                                    : _l10n.hidePassword,
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
                             },
-                    child: const Text('Already have an account? Sign in'),
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${_l10n.passwordRequirements}\n'
+                        '• ${_l10n.passwordMinimumRequirement}\n'
+                        '• ${_l10n.passwordUppercaseRequirement}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      _FieldLabel(_l10n.confirmPassword),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _confirmPasswordController,
+                        obscureText: _obscureConfirmPassword,
+                        textInputAction: TextInputAction.done,
+                        autofillHints: const [AutofillHints.newPassword],
+                        validator: _validateConfirmPassword,
+                        onFieldSubmitted: (_) => _submit(),
+                        decoration: InputDecoration(
+                          hintText: _l10n.confirmPasswordHint,
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            tooltip:
+                                _obscureConfirmPassword
+                                    ? _l10n.showPassword
+                                    : _l10n.hidePassword,
+                            onPressed: () {
+                              setState(() {
+                                _obscureConfirmPassword =
+                                    !_obscureConfirmPassword;
+                              });
+                            },
+                            icon: Icon(
+                              _obscureConfirmPassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+
+                      SizedBox(
+                        height: 52,
+                        child: FilledButton(
+                          onPressed: isBusy ? null : _submit,
+                          child:
+                              _isLoading
+                                  ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : Text(_l10n.createAccountButton),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      OutlinedButton(
+                        onPressed: isBusy ? null : _continueAsGuest,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        child:
+                            _isContinuingAsGuest
+                                ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : Text(_l10n.continueAsGuest),
+                      ),
+                      const SizedBox(height: 20),
+
+                      Center(
+                        child: TextButton(
+                          onPressed: isBusy ? null : _openSignIn,
+                          child: Text(_l10n.alreadyHaveAccount),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _l10n.authenticationSecurityNote,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Center(
-                  child: TextButton(
-                    onPressed: _isLoading ? null : _continueAsGuest,
-                    child: const Text('Continue as Guest'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Your account will be created using Firebase Authentication.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: PlantPulseColors.muted,
-                    fontSize: 11,
-                    height: 1.5,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -372,6 +424,29 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(label, style: const TextStyle(fontWeight: FontWeight.w800));
+    return Text(label, style: Theme.of(context).textTheme.labelLarge);
+  }
+}
+
+class _PlantMark extends StatelessWidget {
+  const _PlantMark();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        color: colors.primaryContainer,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Icon(
+        Icons.eco_outlined,
+        size: 40,
+        color: colors.onPrimaryContainer,
+      ),
+    );
   }
 }

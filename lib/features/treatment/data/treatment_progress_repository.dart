@@ -72,4 +72,28 @@ class TreatmentProgressRepository {
   }) {
     return _storage.remove(_keyFor(scope: scope, contextId: contextId));
   }
+
+  /// Deletes all treatment records for one plant in the specified user scope.
+  Future<void> deleteForPlant({
+    required String scope,
+    required String plantId,
+  }) async {
+    final normalizedScope = scope.trim();
+    final normalizedPlantId = plantId.trim();
+
+    if (normalizedScope.isEmpty) {
+      throw ArgumentError.value(scope, 'scope', 'Must not be empty.');
+    }
+
+    if (normalizedPlantId.isEmpty) {
+      throw ArgumentError.value(plantId, 'plantId', 'Must not be empty.');
+    }
+
+    final prefix =
+        '${StorageKeys.cachedTreatmentPlans}_'
+        '${Uri.encodeComponent(normalizedScope)}_'
+        '${Uri.encodeComponent('$normalizedPlantId:')}';
+
+    await _storage.removeByPrefix(prefix);
+  }
 }

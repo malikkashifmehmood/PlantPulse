@@ -98,6 +98,20 @@ class LocalStorageService {
     }
   }
 
+  /// Removes keys beginning with [prefix], without affecting other keys.
+  Future<void> removeByPrefix(String prefix) async {
+    if (prefix.trim().isEmpty) {
+      throw ArgumentError.value(prefix, 'prefix', 'Must not be empty.');
+    }
+
+    final matchingKeys =
+        _preferences.getKeys().where((key) => key.startsWith(prefix)).toList();
+
+    for (final key in matchingKeys) {
+      await remove(key);
+    }
+  }
+
   Future<void> clear() async {
     try {
       final success = await _preferences.clear();

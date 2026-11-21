@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class PlantPulseColors {
-  static const forest = Color(0xFF0D4A2A);
+  static const forest = Color(0xFF0B3D22);
   static const green = Color(0xFF168447);
   static const bright = Color(0xFF35B968);
   static const mint = Color(0xFFE8F6EC);
@@ -38,9 +38,16 @@ ThemeData buildPlantPulseTheme() {
     appBarTheme: const AppBarTheme(
       backgroundColor: PlantPulseColors.cream,
       surfaceTintColor: Colors.transparent,
-      foregroundColor: PlantPulseColors.ink,
+      foregroundColor: PlantPulseColors.forest,
       elevation: 0,
       centerTitle: false,
+      titleTextStyle: TextStyle(
+        fontFamily: 'serif',
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.2,
+        color: PlantPulseColors.forest,
+      ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -63,11 +70,15 @@ ThemeData buildPlantPulseTheme() {
       color: Colors.white,
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: const BorderSide(color: PlantPulseColors.line),
+      ),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: Colors.white,
       indicatorColor: PlantPulseColors.mint,
+      surfaceTintColor: Colors.transparent,
       height: 72,
       labelTextStyle: WidgetStatePropertyAll(
         const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
@@ -75,7 +86,7 @@ ThemeData buildPlantPulseTheme() {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: PlantPulseColors.green,
+        backgroundColor: PlantPulseColors.forest,
         foregroundColor: Colors.white,
         minimumSize: const Size.fromHeight(52),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

@@ -15,4 +15,7 @@ class StorageKeys {
 
   static const String cachedTreatmentPlans =
       'plantpulse_cached_treatment_plans';
+
+  static const String cachedExpertMessages =
+      'plantpulse_cached_expert_messages';
 }

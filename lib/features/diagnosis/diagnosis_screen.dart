@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/app.dart';
@@ -8,6 +9,7 @@ import '../../app/app_theme.dart';
 import '../../core/models/plant.dart';
 import '../../core/models/plant_diagnosis.dart';
 import '../../core/network/plantpulse_api.dart';
+import '../../l10n/app_localizations.dart';
 import '../expert/expert_screen.dart';
 import '../treatment/treatment_screen.dart';
 
@@ -32,7 +34,10 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
   bool _saved = false;
   bool _saveAttempted = false;
 
-  String get _scope => FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+  String get _scope {
+    if (Firebase.apps.isEmpty) return 'guest';
+    return FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+  }
 
   double get _confidence =>
       widget.prediction.confidence.clamp(0.0, 1.0).toDouble();
@@ -84,8 +89,10 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
         _saved = true;
       });
 
+      final l10n = AppLocalizations.of(context);
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Prediction saved for ${plant.name}.')),
+        SnackBar(content: Text(l10n.diagnosisSavedForPlant(plant.name))),
       );
     } catch (_) {
       if (!mounted) return;
@@ -95,8 +102,8 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not save prediction. Please try Save again.'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).diagnosisSaveFailed),
         ),
       );
     } finally {
@@ -131,218 +138,281 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final plant = widget.plant;
-    final confidencePercent = (_confidence * 100).round();
-
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => Navigator.pop(context),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: const Text('Diagnosis'),
-        actions: [
-          IconButton(
-            onPressed: _saving || _saved ? null : _saveDiagnosis,
-            icon: Icon(
-              _saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+  Widget _buildImage(double height) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: Image.file(
+        widget.imageFile,
+        width: double.infinity,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) {
+          return Container(
+            width: double.infinity,
+            height: height,
+            color: PlantPulseColors.mint,
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.eco_rounded,
+              size: 76,
+              color: PlantPulseColors.green,
             ),
-            tooltip: _saved ? 'Saved' : 'Save prediction',
-          ),
-        ],
+          );
+        },
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    );
+  }
+
+  Widget _buildConfidenceCard(int confidencePercent, AppLocalizations l10n) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(26),
-              child: Image.file(
-                widget.imageFile,
-                width: double.infinity,
-                height: 230,
-                fit: BoxFit.cover,
-                errorBuilder:
-                    (_, __, ___) => Container(
-                      height: 230,
-                      width: double.infinity,
-                      color: PlantPulseColors.mint,
-                      child: const Icon(
-                        Icons.eco_rounded,
-                        size: 80,
-                        color: PlantPulseColors.green,
-                      ),
-                    ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              widget.prediction.displayName,
-              style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              plant == null
-                  ? 'AI model prediction'
-                  : '${plant.name} • ${plant.species}',
-              style: const TextStyle(
-                color: PlantPulseColors.muted,
-                fontSize: 12,
-              ),
-            ),
-            if (plant != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                _saved
-                    ? 'Prediction saved to this plant’s history'
-                    : _saving
-                    ? 'Saving prediction...'
-                    : 'Prediction will be saved to this plant’s history',
-                style: TextStyle(
-                  color:
-                      _saved ? PlantPulseColors.green : PlantPulseColors.muted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-            const SizedBox(height: 20),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 66,
-                      height: 66,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            value: _confidence,
-                            strokeWidth: 7,
-                            color: PlantPulseColors.green,
-                            backgroundColor: PlantPulseColors.mint,
-                          ),
-                          Text(
-                            '$confidencePercent%',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Model score',
-                            style: TextStyle(fontWeight: FontWeight.w900),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            'Model: ${widget.prediction.model}',
-                            style: const TextStyle(
-                              color: PlantPulseColors.muted,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            const Text(
-              'Prediction details',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _isHealthy
-                  ? 'The model classified this image as a healthy tomato leaf.'
-                  : 'The model classified this image as '
-                      '${widget.prediction.displayName}. '
-                      'Use this result as an initial indication, '
-                      'not a confirmed diagnosis.',
-              style: const TextStyle(height: 1.5),
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: PlantPulseColors.warningBg,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            SizedBox(
+              width: 66,
+              height: 66,
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  const Icon(
-                    Icons.info_outline_rounded,
-                    size: 20,
-                    color: PlantPulseColors.warning,
+                  CircularProgressIndicator(
+                    value: _confidence,
+                    strokeWidth: 7,
+                    color: PlantPulseColors.green,
+                    backgroundColor: PlantPulseColors.mint,
                   ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Text(
-                      '${widget.prediction.notice} '
-                      'The model score is not a calibrated probability '
-                      'of being correct. This model has not been validated '
-                      'here on field images from Pakistan.',
-                      style: const TextStyle(fontSize: 12, height: 1.5),
+                  Text(
+                    '$confidencePercent%',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _openTreatmentPlan,
-                child: const Text('View Treatment Plan'),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.diagnosisModelScore,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    l10n.diagnosisModelName(widget.prediction.model),
+                    style: const TextStyle(
+                      color: PlantPulseColors.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _saving || _saved ? null : _saveDiagnosis,
-                    icon: Icon(
-                      _saved
-                          ? Icons.bookmark_rounded
-                          : Icons.bookmark_border_rounded,
-                    ),
-                    label: Text(
-                      _saving
-                          ? 'Saving...'
-                          : _saved
-                          ? 'Saved'
-                          : 'Save',
-                    ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotice(AppLocalizations l10n) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: PlantPulseColors.warningBg,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            size: 21,
+            color: PlantPulseColors.warning,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '${widget.prediction.notice} ${l10n.diagnosisNotice}',
+              style: const TextStyle(fontSize: 12, height: 1.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSaveStatus(AppLocalizations l10n) {
+    if (widget.plant == null) {
+      return const SizedBox.shrink();
+    }
+
+    final String message;
+    final Color color;
+
+    if (_saved) {
+      message = l10n.diagnosisSavedHistory;
+      color = PlantPulseColors.green;
+    } else if (_saving) {
+      message = l10n.diagnosisSavingHistory;
+      color = PlantPulseColors.muted;
+    } else {
+      message = l10n.diagnosisWillSaveHistory;
+      color = PlantPulseColors.muted;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 7),
+      child: Text(
+        message,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton(
+          onPressed: _openTreatmentPlan,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            child: Text(l10n.diagnosisViewTreatment),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            if (widget.plant != null) ...[
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving || _saved ? null : _saveDiagnosis,
+                  icon: Icon(
+                    _saved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                  ),
+                  label: Text(
+                    _saving
+                        ? l10n.diagnosisSaving
+                        : _saved
+                        ? l10n.diagnosisSaved
+                        : l10n.diagnosisSave,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _openExpert,
-                    icon: const Icon(Icons.support_agent_rounded),
-                    label: const Text('Expert'),
-                  ),
-                ),
-              ],
+              ),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _openExpert,
+                icon: const Icon(Icons.support_agent_rounded),
+                label: Text(l10n.diagnosisExpert),
+              ),
             ),
           ],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final plant = widget.plant;
+    final confidencePercent = (_confidence * 100).round();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.diagnosisTitle),
+        actions: [
+          if (plant != null)
+            IconButton(
+              onPressed: _saving || _saved ? null : _saveDiagnosis,
+              icon: Icon(
+                _saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+              ),
+              tooltip:
+                  _saved ? l10n.diagnosisSaved : l10n.diagnosisSavePrediction,
+            ),
+        ],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final imageHeight =
+                      (constraints.maxWidth * 0.58)
+                          .clamp(180.0, 280.0)
+                          .toDouble();
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildImage(imageHeight),
+                      const SizedBox(height: 20),
+                      Text(
+                        widget.prediction.displayName,
+                        style: const TextStyle(
+                          fontSize: 27,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        plant == null
+                            ? l10n.diagnosisAiPrediction
+                            : '${plant.name} • ${plant.species}',
+                        style: const TextStyle(
+                          color: PlantPulseColors.muted,
+                          fontSize: 12,
+                        ),
+                      ),
+                      _buildSaveStatus(l10n),
+                      const SizedBox(height: 20),
+                      _buildConfidenceCard(confidencePercent, l10n),
+                      const SizedBox(height: 22),
+                      Text(
+                        l10n.diagnosisDetails,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 9),
+                      Text(
+                        _isHealthy
+                            ? l10n.diagnosisHealthyDescription
+                            : l10n.diagnosisDiseaseDescription(
+                              widget.prediction.displayName,
+                            ),
+                        style: const TextStyle(height: 1.6, fontSize: 14),
+                      ),
+                      const SizedBox(height: 18),
+                      _buildNotice(l10n),
+                      const SizedBox(height: 22),
+                      _buildActionButtons(l10n),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
         ),
       ),
     );

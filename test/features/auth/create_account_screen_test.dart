@@ -1,8 +1,10 @@
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mock_exceptions/mock_exceptions.dart';
 import 'package:plantpulse/features/auth/create_account_screen.dart';
 import 'package:plantpulse/features/home/home_screen.dart';
+import 'package:plantpulse/l10n/app_localizations.dart';
 
 void main() {
   late MockFirebaseAuth mockAuth;
@@ -12,7 +14,11 @@ void main() {
     tester.view.devicePixelRatio = 1;
 
     await tester.pumpWidget(
-      MaterialApp(home: CreateAccountScreen(auth: mockAuth)),
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: CreateAccountScreen(auth: mockAuth),
+      ),
     );
     await tester.pumpAndSettle();
   }
@@ -109,7 +115,11 @@ void main() {
         isTrue,
       );
 
-      await tester.tap(find.byTooltip('Show password').first);
+      // Reveal the first password field.
+      final firstVisibilityButton = find.byTooltip('Show password').first;
+
+      await tester.ensureVisible(firstVisibilityButton);
+      await tester.tap(firstVisibilityButton);
       await tester.pumpAndSettle();
 
       expect(
@@ -121,7 +131,11 @@ void main() {
         isTrue,
       );
 
-      await tester.tap(find.byTooltip('Show password'));
+      // Reveal the confirmation field independently.
+      final confirmVisibilityButton = find.byTooltip('Show password');
+
+      await tester.ensureVisible(confirmVisibilityButton);
+      await tester.tap(confirmVisibilityButton);
       await tester.pumpAndSettle();
 
       expect(
@@ -145,6 +159,54 @@ void main() {
       expect(user.displayName, 'Ali Khan');
       expect(find.byType(HomeScreen), findsOneWidget);
       expect(find.text('Create account'), findsNothing);
+    });
+
+    testWidgets('signs out the existing user before entering Guest mode', (
+      tester,
+    ) async {
+      final existingUser = MockUser(
+        uid: 'previous-account',
+        email: 'previous@example.com',
+      );
+      mockAuth = MockFirebaseAuth(mockUser: existingUser, signedIn: true);
+
+      await openCreateAccountScreen(tester);
+
+      expect(mockAuth.currentUser?.uid, 'previous-account');
+
+      final guestButton = find.text('Continue as Guest');
+      await tester.ensureVisible(guestButton);
+      await tester.tap(guestButton);
+      await tester.pumpAndSettle();
+
+      expect(mockAuth.currentUser, isNull);
+      expect(find.byType(HomeScreen), findsOneWidget);
+    });
+
+    testWidgets('does not enter Guest mode when sign-out fails', (
+      tester,
+    ) async {
+      final existingUser = MockUser(
+        uid: 'previous-account',
+        email: 'previous@example.com',
+      );
+      mockAuth = MockFirebaseAuth(mockUser: existingUser, signedIn: true);
+
+      whenCalling(
+        Invocation.method(#signOut, null),
+      ).on(mockAuth).thenThrow(Exception('Simulated sign-out failure'));
+
+      await openCreateAccountScreen(tester);
+
+      final guestButton = find.text('Continue as Guest');
+      await tester.ensureVisible(guestButton);
+      await tester.tap(guestButton);
+      await tester.pumpAndSettle();
+
+      expect(mockAuth.currentUser?.uid, 'previous-account');
+      expect(find.byType(HomeScreen), findsNothing);
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.text('Continue as Guest'), findsOneWidget);
     });
   });
 }

@@ -48,3 +48,6 @@ app.*.map.json
 .widget_preview/
 
 /android/build/
+
+# Localization recovery archive
+/localization_recovery_archive/

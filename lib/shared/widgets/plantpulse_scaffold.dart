@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
+
 import '../../app/app_theme.dart';
 import '../../features/alerts/alerts_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/plants/plants_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/scan/scan_screen.dart';
+import '../../l10n/app_localizations.dart';
 
 class PlantPulseScaffold extends StatelessWidget {
   final int currentIndex;
   final Widget child;
+  final bool showBottomNavigation;
 
   const PlantPulseScaffold({
     super.key,
     required this.currentIndex,
     required this.child,
+    this.showBottomNavigation = true,
   });
 
   static const pages = [
@@ -32,39 +36,44 @@ class PlantPulseScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+
     return Scaffold(
       body: SafeArea(child: child),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: currentIndex,
-        onDestinationSelected: (index) => _select(context, index),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.local_florist_outlined),
-            selectedIcon: Icon(Icons.local_florist_rounded),
-            label: 'Plants',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.center_focus_weak_rounded),
-            selectedIcon: Icon(Icons.center_focus_strong_rounded),
-            label: 'Scan',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.notifications_none_rounded),
-            selectedIcon: Icon(Icons.notifications_rounded),
-            label: 'Alerts',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Profile',
-          ),
-        ],
-      ),
+      bottomNavigationBar:
+          showBottomNavigation
+              ? NavigationBar(
+                selectedIndex: currentIndex,
+                onDestinationSelected: (index) => _select(context, index),
+                destinations: [
+                  NavigationDestination(
+                    icon: const Icon(Icons.home_outlined),
+                    selectedIcon: const Icon(Icons.home_rounded),
+                    label: strings.navHome,
+                  ),
+                  NavigationDestination(
+                    icon: const Icon(Icons.local_florist_outlined),
+                    selectedIcon: const Icon(Icons.local_florist_rounded),
+                    label: strings.navPlants,
+                  ),
+                  NavigationDestination(
+                    icon: const Icon(Icons.center_focus_weak_rounded),
+                    selectedIcon: const Icon(Icons.center_focus_strong_rounded),
+                    label: strings.navScan,
+                  ),
+                  NavigationDestination(
+                    icon: const Icon(Icons.notifications_none_rounded),
+                    selectedIcon: const Icon(Icons.notifications_rounded),
+                    label: strings.navAlerts,
+                  ),
+                  NavigationDestination(
+                    icon: const Icon(Icons.person_outline_rounded),
+                    selectedIcon: const Icon(Icons.person_rounded),
+                    label: strings.navProfile,
+                  ),
+                ],
+              )
+              : null,
     );
   }
 }
@@ -83,42 +92,69 @@ class PageHeader extends StatelessWidget {
     this.back = false,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
+  Widget _titleContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (back)
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded),
-          ),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.6,
-                ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  subtitle!,
-                  style: const TextStyle(
-                    color: PlantPulseColors.muted,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ],
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.6,
           ),
         ),
-        if (trailing != null) trailing!,
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            subtitle!,
+            style: const TextStyle(color: PlantPulseColors.muted, fontSize: 13),
+          ),
+        ],
       ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 400;
+
+        if (narrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  if (back)
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                  Expanded(child: _titleContent()),
+                ],
+              ),
+              if (trailing != null) ...[
+                const SizedBox(height: 8),
+                Align(alignment: Alignment.centerRight, child: trailing!),
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            if (back)
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+            Expanded(child: _titleContent()),
+            if (trailing != null) trailing!,
+          ],
+        );
+      },
     );
   }
 }
